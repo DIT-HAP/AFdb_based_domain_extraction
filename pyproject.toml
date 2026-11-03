@@ -1,0 +1,161 @@
+# =============================================================================
+# 0. Project Metadata & Dependency Declarations
+# =============================================================================
+[project]
+name = "afdb-domain-extraction"
+version = "2.0.0"
+description = "AlphaFold PAE/pLDDT domain calling and unified segment tables for S. pombe"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "biopython>=1.84",
+    "loguru>=0.7.2",
+    "numpy>=2.2.0",
+    "pandas>=2.2.0",
+    "python-igraph>=0.11.0",
+    "pyyaml>=6.0.2",
+    "typer>=0.15.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "ruff>=0.10.0",
+    "ty>=0.0.90",
+]
+
+# =============================================================================
+# 1. UV Environment Restrictions (Prioritize Conda/Mamba, Prevent .venv Creation)
+# =============================================================================
+[tool.uv]
+managed = false
+package = false
+python-preference = "only-system"
+python-downloads = "never"
+
+# =============================================================================
+# 2. RUFF Global Linter & Formatter Settings
+# =============================================================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+indent-width = 4
+unsafe-fixes = false
+src = ["src", "scripts"]
+extend-exclude = [
+    ".git",
+    ".snakemake",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.ipynb",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+# =============================================================================
+# 3. RUFF Rule Catalog (mirrors the workspace quality gate)
+# =============================================================================
+[tool.ruff.lint]
+select = [
+    "F",
+    "E",
+    "W",
+    "B",
+    "A",
+    "YTT",
+    "UP",
+    "ANN",
+    "C90",
+    "SIM",
+    "RET",
+    "PIE",
+    "C4",
+    "FURB",
+    "ARG",
+    "PLE",
+    "PLC0415",
+    "PLR09",
+    "I",
+    "PTH",
+    "ICN",
+    "TID251",
+    "T20",
+    "BLE",
+    "TRY",
+    "RSE",
+    "T10",
+    "PD",
+    "NPY",
+    "PERF",
+    "N",
+    "D200",
+    "PGH",
+    "RUF",
+    "PT",
+]
+
+ignore = [
+    "ANN401",
+    "TRY003",
+    "N803",
+    "N806",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 20
+max-branches = 10
+max-returns = 4
+max-statements = 40
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"logging".msg = "Standard library 'logging' is banned. Use 'from loguru import logger' exclusively."
+"os.path".msg = "Module 'os.path' is banned. Use 'from pathlib import Path' instead."
+"typing.Optional".msg = "Use modern Python 3.12+ 'X | None' syntax instead of 'Optional[X]'."
+"typing.Union".msg = "Use modern Python 3.12+ 'X | Y' syntax instead of 'Union[X, Y]'."
+"typing.List".msg = "Use built-in generic 'list[...]' instead of 'typing.List'."
+"typing.Dict".msg = "Use built-in generic 'dict[...]' instead of 'typing.Dict'."
+"typing.Tuple".msg = "Use built-in generic 'tuple[...]' instead of 'typing.Tuple'."
+"typing.Set".msg = "Use built-in generic 'set[...]' instead of 'typing.Set'."
+
+[tool.ruff.lint.per-file-ignores]
+"**/main.py" = ["BLE001"]
+"scripts/**/*.py" = ["BLE001", "E402"]
+"src/cli.py" = ["B008", "BLE001"]
+"tests/**/*.py" = ["ANN", "PLR09"]
+
+# =============================================================================
+# 4. TY Static Type Checker Configuration
+# =============================================================================
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "scripts"]
+exclude = ["tests/fixtures", "**/__pycache__"]
+
+[tool.ty.analysis]
+return-type-inference = "never"
+
+[tool.ty.rules]
+possibly-missing-import = "error"
+unresolved-reference = "error"
+invalid-assignment = "error"
+invalid-argument-type = "error"
+invalid-return-type = "error"
+redundant-cast = "warn"
+unused-ignore-comment = "warn"
+possibly-missing-attribute = "warn"

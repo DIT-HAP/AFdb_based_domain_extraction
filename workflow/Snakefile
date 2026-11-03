@@ -1,0 +1,306 @@
+"""
+AFdb domain extraction workflow.
+================================
+
+Root Snakefile holding the shared wildcard rules. Dataset declarations live in
+``workflow/datasets/<dataset>.smk`` and only set input paths and version
+labels, so rules are written once.
+
+Input
+-----
+- ``config/config.yaml`` and the dataset declarations.
+
+Output
+------
+- ``results/<dataset>/segments.tsv`` and ``results/combined/segments.tsv``.
+
+Usage
+-----
+    snakemake -n
+    snakemake --cores 16 --use-conda
+"""
+
+from pathlib import Path
+
+WORKFLOW_DIR = Path(workflow.basedir).resolve()
+PROJECT_ROOT = WORKFLOW_DIR.parent
+CONFIG_PATH = PROJECT_ROOT / "config" / "config.yaml"
+RESULTS = PROJECT_ROOT / "results"
+DATA = PROJECT_ROOT / "data"
+RESOURCES = PROJECT_ROOT / "resources"
+CLI = PROJECT_ROOT / "scripts" / "afdb_domains.py"
+CORE_ENV = str(WORKFLOW_DIR / "envs" / "core.yaml")
+
+configfile: str(CONFIG_PATH)
+
+CACHE_ROOT = Path(config["paths"]["cache_root"])
+LEGACY_ROOT = Path(config["paths"]["legacy_root"])
+RAW_ROOT = Path(config["paths"]["raw_root"])
+
+
+def resolve(spec):
+    """Resolve a cache:/legacy:/raw:/project: path specification."""
+    prefix, separator, relative = spec.partition(":")
+    roots = {
+        "cache": CACHE_ROOT,
+        "legacy": LEGACY_ROOT,
+        "raw": RAW_ROOT,
+        "project": PROJECT_ROOT,
+    }
+    if separator and prefix in roots:
+        return str((roots[prefix] / relative).resolve())
+    return str((PROJECT_ROOT / spec).resolve())
+
+
+FEATURES_GENE_TABLE = resolve(config["resources"]["pombase"]["features_gene_table"])
+FEATURES_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["features_peptide_stats"])
+POMBASE_GFF3 = resolve(config["resources"]["pombase"]["gff3"])
+POMBASE_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["peptide_stats"])
+ECOD_DUMP = resolve(config["resources"]["ecod"]["dump"])
+
+DATASETS = {}
+include: "datasets/AFDB_v4.smk"
+include: "datasets/vDulab.smk"
+include: "datasets/vDulab2.smk"
+include: "datasets/AF3.smk"
+include: "datasets/DY47073.smk"
+include: "datasets/AFDB_20251107.smk"
+
+ENABLED_DATASETS = sorted(name for name, entry in DATASETS.items() if entry["enabled"])
+
+
+def subset_flag(entry):
+    """Render the optional --protein-subset flag for a dataset."""
+    subset = entry.get("protein_subset")
+    return f"--protein-subset {subset}" if subset else ""
+
+
+wildcard_constraints:
+    dataset="(?!combined$)[A-Za-z0-9_.-]+",
+
+
+rule all:
+    input:
+        expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
+        f"{RESULTS}/combined/segments.tsv",
+
+
+rule pae_to_domains:
+    input:
+        pae_dir=lambda wildcards: DATASETS[wildcards.dataset]["pae_dir"],
+    output:
+        domains=directory(f"{RESULTS}/{{dataset}}/domains"),
+    params:
+        cli=str(CLI),
+        config=str(CONFIG_PATH),
+        subset=lambda wildcards: subset_flag(DATASETS[wildcards.dataset]),
+    threads: 8
+    resources:
+        mem_mb=8000,
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} pae-to-domains --pae-dir {input.pae_dir} "
+        "--output-dir {output.domains} --jobs {threads} {params.subset} --config {params.config}"
+
+
+rule domains_to_table:
+    input:
+        rules.pae_to_domains.output.domains,
+    output:
+        table=f"{RESULTS}/{{dataset}}/PAE_domain.tsv",
+    params:
+        cli=str(CLI),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} domains-to-table --domains-dir {input} --output {output.table}"
+
+
+rule extract_plddt:
+    input:
+        structure_dir=lambda wildcards: DATASETS[wildcards.dataset]["structure_dir"],
+    output:
+        table=f"{RESULTS}/{{dataset}}/pLDDT_scores.tsv",
+    params:
+        cli=str(CLI),
+        subset=lambda wildcards: subset_flag(DATASETS[wildcards.dataset]),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} extract-plddt --structure-dir {input.structure_dir} "
+        "--output {output.table} {params.subset}"
+
+
+rule merge_domains:
+    input:
+        pae_table=rules.domains_to_table.output.table,
+        plddt_table=rules.extract_plddt.output.table,
+        gene_table=lambda wildcards: DATASETS[wildcards.dataset]["gene_table"],
+    output:
+        table=f"{RESULTS}/{{dataset}}/reformated_PAE_domain.tsv",
+    params:
+        cli=str(CLI),
+        config=str(CONFIG_PATH),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} merge-domains --pae-table {input.pae_table} "
+        "--plddt-table {input.plddt_table} --gene-table {input.gene_table} "
+        "--output {output.table} --config {params.config}"
+
+
+rule assign_type:
+    input:
+        rules.merge_domains.output.table,
+    output:
+        table=f"{RESULTS}/{{dataset}}/annotated_PAE_domain.tsv",
+    params:
+        cli=str(CLI),
+        config=str(CONFIG_PATH),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} assign-type --input {input} --output {output.table} --config {params.config}"
+
+
+rule confident_domains:
+    input:
+        plddt_table=rules.extract_plddt.output.table,
+        gene_table=lambda wildcards: DATASETS[wildcards.dataset]["gene_table"],
+    output:
+        table=f"{RESULTS}/{{dataset}}/confident_domains.tsv",
+    params:
+        cli=str(CLI),
+        config=str(CONFIG_PATH),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} confident-domains --plddt-table {input.plddt_table} "
+        "--gene-table {input.gene_table} --output {output.table} --config {params.config}"
+
+
+rule ted_pombe:
+    input:
+        curated=f"{RESOURCES}/ted/pombe_ted_domains_detailed.tsv",
+        gene_table=FEATURES_GENE_TABLE,
+    output:
+        f"{RESOURCES}/ted/pombe_ted_segments.tsv",
+    params:
+        cli=str(CLI),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} ted-pombe --ted-dump {input.curated} "
+        "--gene-table {input.gene_table} --output {output}"
+
+
+rule ecod_pombe:
+    input:
+        ecod_dump=ECOD_DUMP,
+        gene_table=FEATURES_GENE_TABLE,
+    output:
+        f"{RESOURCES}/ecod/pombe_ecod_segments.tsv",
+    params:
+        cli=str(CLI),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} ecod-pombe --ecod-dump {input.ecod_dump} "
+        "--gene-table {input.gene_table} --output {output}"
+
+
+rule unify_segments:
+    input:
+        pae_table=rules.assign_type.output.table,
+        ted_table=f"{RESOURCES}/ted/pombe_ted_segments.tsv",
+        ecod_table=f"{RESOURCES}/ecod/pombe_ecod_segments.tsv",
+        gene_table=FEATURES_GENE_TABLE,
+        stats_table=FEATURES_PEPTIDE_STATS,
+    output:
+        f"{RESULTS}/{{dataset}}/segments.tsv",
+    params:
+        cli=str(CLI),
+        config=str(CONFIG_PATH),
+        dataset=lambda wildcards: wildcards.dataset,
+        version=lambda wildcards: DATASETS[wildcards.dataset]["source_version"],
+    wildcard_constraints:
+        dataset="(?!combined$)[A-Za-z0-9_.-]+",
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} unify-segments --pae-table {input.pae_table} "
+        "--ted-table {input.ted_table} --ecod-table {input.ecod_table} "
+        "--gene-table {input.gene_table} --stats-table {input.stats_table} "
+        "--output {output} --dataset {params.dataset} --pae-version {params.version} "
+        "--config {params.config}"
+
+
+rule combine_segments:
+    input:
+        tables=expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
+    output:
+        f"{RESULTS}/combined/segments.tsv",
+    params:
+        cli=str(CLI),
+        flags=lambda wildcards, input: " ".join(f"--input {path}" for path in input.tables),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} combine-segments {params.flags} --output {output}"
+
+
+rule dna_bed:
+    input:
+        gff=POMBASE_GFF3,
+        peptide_stats=POMBASE_PEPTIDE_STATS,
+    output:
+        f"{DATA}/nucleotide_bed.tsv",
+    params:
+        cli=str(CLI),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} dna-bed --gff {input.gff} "
+        "--peptide-stats {input.peptide_stats} --output {output}"
+
+
+rule dna_map:
+    input:
+        nucleotide_bed=f"{DATA}/nucleotide_bed.tsv",
+        annotated=rules.assign_type.output.table,
+    output:
+        table=f"{RESULTS}/{{dataset}}/DNA_domain.tsv",
+    params:
+        cli=str(CLI),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} dna-map --nucleotide-bed {input.nucleotide_bed} "
+        "--annotated {input.annotated} --output {output.table}"
+
+
+rule dna_organize:
+    input:
+        rules.dna_map.output.table,
+    output:
+        table=f"{RESULTS}/{{dataset}}/merged_DNA_domain.tsv",
+    params:
+        cli=str(CLI),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} dna-organize --input {input} --output {output.table}"
+
+
+rule dna_genome_bed:
+    input:
+        rules.dna_organize.output.table,
+    output:
+        table=f"{RESULTS}/{{dataset}}/domains.bed",
+    params:
+        cli=str(CLI),
+    conda:
+        CORE_ENV
+    shell:
+        "python {params.cli} dna-genome-bed --input {input} --output {output.table}"

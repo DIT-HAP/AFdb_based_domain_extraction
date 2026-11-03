@@ -1,0 +1,46 @@
+# =============================================================================
+# Path roots
+# -----------------------------------------------------------------------------
+# Only these roots are machine-specific. Everything else is expressed relative
+# to one of them with a prefix: cache: / legacy: / raw: / project:
+# =============================================================================
+paths:
+  cache_root: "/data/c/yangyusheng_optimized/resource"
+  legacy_root: "/data/c/yangyusheng_optimized/AFdb_based_domain_extraction"
+  raw_root: "/data/c/yangyusheng_optimized/AFdb_based_domain_extraction/data/0_raw"
+  project_root: "."
+
+# =============================================================================
+# External resources
+# -----------------------------------------------------------------------------
+# Pinned per role rather than globally: the legacy results were produced with
+# different PomBase releases for different analyses (see README provenance).
+# =============================================================================
+resources:
+  pombase:
+    coding_release: "2023-07-01"
+    features_release: "2025-05-01"
+    gene_table: "project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"
+    peptide_stats: "project:resources/pombase/2023-07-01/PeptideStats.tsv"
+    gff3: "project:resources/pombase/2023-07-01/Schizosaccharomyces_pombe_all_chromosomes.gff3"
+    features_gene_table: "project:resources/pombase/2025-05-01/gene_IDs_names_products.tsv"
+    features_peptide_stats: "project:resources/pombase/2025-05-01/PeptideStats.tsv"
+  ted:
+    release: "zenodo13908086"
+    filtered_dump: "legacy:references/TED/ted_365m.domain_summary.cath.globularity.taxid.tsv"
+    segmentation_dump: "legacy:references/TED/ted_214m_per_chain_segmentation.tsv"
+  ecod:
+    release: "dpam_v5"
+    dump: "legacy:references/ECOD/af2_eukaryotes.dpam_v5.domains.txt"
+
+# =============================================================================
+# Pipeline parameters
+# =============================================================================
+parameters:
+  pae_power: 1.0
+  pae_cutoff: 5.0
+  resolution: 0.5
+  plddt_threshold: 70.0
+  merge_gap: 11
+  confident_min_length: 50
+  confident_merge_gap: 6

@@ -1,7 +1,8 @@
-data/
-references/
-tmp/
-results
-src/log
 __pycache__/
 *.py[cod]
+.snakemake/
+data/
+results/
+tmp/
+*.log
+.DS_Store
