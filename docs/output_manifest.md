@@ -14,7 +14,7 @@ baseline. Nothing is deleted from it.
 | Reformatted domains | `<ds>_reformated_PAE_domain_based_on_pLDDT.tsv` | `merge-domains` | Reproduced |
 | Annotated domains | `<ds>_annotated_PAE_domain_based_on_pLDDT.tsv` | `assign-type` | Reproduced |
 | Confident domains | `<ds>_confident_domains_based_on_pLDDT.tsv` | `confident-domains` | Reproduced with known drift (below) |
-| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | Curated input + enriched resource |
+| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | Regenerated as `resources/ted/pombe_ted_segments.tsv` from the raw dump |
 | ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | Regenerated into `resources/ecod/` |
 
 Datasets covered: `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, `DY47073`.

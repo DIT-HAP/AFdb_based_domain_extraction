@@ -2,7 +2,7 @@
 
 rule ted_pombe:
     input:
-        curated=f"{RESOURCES}/ted/pombe_ted_domains_detailed.tsv",
+        ted_dump=TED_DUMP,
         gene_table=FEATURES_GENE_TABLE,
     output:
         f"{RESOURCES}/ted/pombe_ted_segments.tsv",
@@ -11,7 +11,7 @@ rule ted_pombe:
     conda:
         CORE_ENV
     shell:
-        "python {params.cli} ted-pombe --ted-dump {input.curated} "
+        "python {params.cli} ted-pombe --ted-dump {input.ted_dump} "
         "--gene-table {input.gene_table} --output {output}"
 
 

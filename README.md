@@ -28,7 +28,7 @@ workflow/datasets/<ds>.smk    Dataset declarations (input paths, version)
 workflow/envs/                Driver environment and the shared rule environment
 src/                          Functional core + typer CLI
 scripts/afdb_domains.py       Thin executable shell
-resources/                    Small curated inputs tracked in git
+resources/                    PomBase-only curated inputs tracked in git
 data/                         Working directory (git-ignored)
 results/                      Pipeline outputs (git-ignored)
 tests/                        Unit and golden tests
@@ -57,16 +57,17 @@ python scripts/afdb_domains.py pae-to-domains --pae-dir <dir> --output-dir <dir>
 
 ## Configuration
 
-`config/config.yaml` contains three path roots. Only these are
-machine-specific:
+`config/config.yaml` declares the machine-specific path roots:
 
 - `cache_root` — PomBase releases and AlphaFold structures.
-- `legacy_root` — the v1 repository, used as the read-only source of the large
-  TED/ECOD dumps and the numerical verification baseline.
+- `reference_root` — `/hugedata/YushengYang/AFdb`, holding the raw `TED/` and
+  `ECOD/` dumps.
+- `legacy_root` — the v1 repository, used as the read-only numerical
+  verification baseline.
 - `raw_root` — the v1 `data/0_raw` directory holding custom predictions.
 
-All other paths are written with a `cache:`, `legacy:`, `raw:`, or `project:`
-prefix and resolved at load time.
+All other paths are written with a `cache:`, `reference:`, `legacy:`, `raw:`,
+or `project:` prefix and resolved at load time.
 
 Resource versions are pinned per role because the legacy results mixed
 releases:

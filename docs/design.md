@@ -28,12 +28,17 @@ root `Snakefile` only holds configuration, dataset declarations, includes, and
 
 ## Resource policy
 
-- `resources/` holds small inputs that the pipeline reads directly and that are
-  committed: PomBase tables, the curated TED PomBase table, the TED/ECOD PomBase
-  subsets, the DY47073 protein subset, and the provenance manifest.
-- Large upstream dumps stay in the cache: TED 146G, ECOD 30M, AlphaFold
-  structures and PAE. `config/config.yaml` points at them; nothing large is
-  copied or committed.
+- `resources/` holds small PomBase-only inputs that the pipeline reads directly
+  and that are committed: PomBase tables, the TED/ECOD PomBase subsets, the
+  DY47073 protein subset, and the provenance manifest.
+- Raw upstream dumps live under the reference root
+  (`/hugedata/YushengYang/AFdb/TED` and `ECOD`): the 128G TED domain summary,
+  the 27G TED per-chain segmentation, and the 31M ECOD dump. AlphaFold
+  structures and PAE stay in the cache. `config/config.yaml` points at them;
+  nothing large is committed.
+- `ted-pombe` and `ecod-pombe` stream the raw dumps and write the PomBase
+  subsets into `resources/`, so the extraction is reproducible from the
+  workflow alone.
 - `fetch-resources` records size and SHA-256 (files under 50MB) for every
   configured resource.
 

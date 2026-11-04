@@ -2,11 +2,12 @@
 Project I/O boundary.
 =====================
 
-Loads ``config/config.yaml``, resolves the ``cache:`` / ``legacy:`` / ``raw:``
-/ ``project:`` path grammar, and provides fail-fast TSV access.
+Loads ``config/config.yaml``, resolves the ``cache:`` / ``reference:`` /
+``legacy:`` / ``raw:`` / ``project:`` path grammar, and provides fail-fast TSV
+access.
 
 The path grammar keeps machine-specific roots in exactly one place, so moving
-the project to another server means editing four values at the top of the YAML.
+the project to another server means editing the roots at the top of the YAML.
 
 Input
 -----
@@ -76,6 +77,7 @@ class AppConfig:
     """Immutable runtime configuration container."""
 
     cache_root: Path
+    reference_root: Path
     legacy_root: Path
     raw_root: Path
     project_root: Path
@@ -107,6 +109,7 @@ def load_config(config_path: Path) -> AppConfig:
     parameters = raw["parameters"]
     roots = {
         "cache": Path(paths["cache_root"]),
+        "reference": Path(paths["reference_root"]),
         "legacy": Path(paths["legacy_root"]),
         "raw": Path(paths["raw_root"]),
         "project": Path(paths["project_root"]).resolve(),
@@ -114,6 +117,7 @@ def load_config(config_path: Path) -> AppConfig:
     pombase = resources["pombase"]
     return AppConfig(
         cache_root=roots["cache"],
+        reference_root=roots["reference"],
         legacy_root=roots["legacy"],
         raw_root=roots["raw"],
         project_root=roots["project"],

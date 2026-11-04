@@ -34,15 +34,17 @@ CORE_ENV = str(WORKFLOW_DIR / "envs" / "core.yaml")
 configfile: str(CONFIG_PATH)
 
 CACHE_ROOT = Path(config["paths"]["cache_root"])
+REFERENCE_ROOT = Path(config["paths"]["reference_root"])
 LEGACY_ROOT = Path(config["paths"]["legacy_root"])
 RAW_ROOT = Path(config["paths"]["raw_root"])
 
 
 def resolve(spec):
-    """Resolve a cache:/legacy:/raw:/project: path specification."""
+    """Resolve a cache:/reference:/legacy:/raw:/project: path specification."""
     prefix, separator, relative = spec.partition(":")
     roots = {
         "cache": CACHE_ROOT,
+        "reference": REFERENCE_ROOT,
         "legacy": LEGACY_ROOT,
         "raw": RAW_ROOT,
         "project": PROJECT_ROOT,
@@ -56,6 +58,7 @@ FEATURES_GENE_TABLE = resolve(config["resources"]["pombase"]["features_gene_tabl
 FEATURES_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["features_peptide_stats"])
 POMBASE_GFF3 = resolve(config["resources"]["pombase"]["gff3"])
 POMBASE_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["peptide_stats"])
+TED_DUMP = resolve(config["resources"]["ted"]["filtered_dump"])
 ECOD_DUMP = resolve(config["resources"]["ecod"]["dump"])
 
 DATASETS = {}

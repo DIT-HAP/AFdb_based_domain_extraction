@@ -2,10 +2,11 @@
 # Path roots
 # -----------------------------------------------------------------------------
 # Only these roots are machine-specific. Everything else is expressed relative
-# to one of them with a prefix: cache: / legacy: / raw: / project:
+# to one of them with a prefix: cache: / reference: / legacy: / raw: / project:
 # =============================================================================
 paths:
   cache_root: "/data/c/yangyusheng_optimized/resource"
+  reference_root: "/hugedata/YushengYang/AFdb"
   legacy_root: "/data/c/yangyusheng_optimized/AFdb_based_domain_extraction"
   raw_root: "/data/c/yangyusheng_optimized/AFdb_based_domain_extraction/data/0_raw"
   project_root: "."
@@ -27,11 +28,11 @@ resources:
     features_peptide_stats: "project:resources/pombase/2025-05-01/PeptideStats.tsv"
   ted:
     release: "zenodo13908086"
-    filtered_dump: "legacy:references/TED/ted_365m.domain_summary.cath.globularity.taxid.tsv"
-    segmentation_dump: "legacy:references/TED/ted_214m_per_chain_segmentation.tsv"
+    filtered_dump: "reference:TED/ted_365m.domain_summary.cath.globularity.taxid.tsv"
+    segmentation_dump: "reference:TED/ted_214m_per_chain_segmentation.tsv"
   ecod:
     release: "dpam_v5"
-    dump: "legacy:references/ECOD/af2_eukaryotes.dpam_v5.domains.txt"
+    dump: "reference:ECOD/af2_eukaryotes.dpam_v5.domains.txt"
 
 # =============================================================================
 # Pipeline parameters

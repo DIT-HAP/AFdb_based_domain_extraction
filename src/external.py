@@ -2,13 +2,15 @@
 PomBase subsets of TED and ECOD.
 ================================
 
-The upstream TED and ECOD dumps cover all eukaryotes and are hundreds of
-gigabytes. Both builders stream those dumps once and keep only the proteins in
-the PomBase gene table, producing small resources that can be committed.
+The upstream TED dump covers all eukaryotes and is hundreds of gigabytes; the
+ECOD dump is the eukaryotic subset. Both builders stream the raw dump once and
+keep only the proteins in the PomBase gene table, producing small resources
+that can be committed.
 
 Input
 -----
-- TED detailed dump (21 columns, no header) and ECOD domain dump (5 columns).
+- Raw TED dump (21 columns, no header) and ECOD domain dump (5 columns) from
+  the reference root.
 - PomBase gene table providing the UniProt identifiers to keep.
 
 Output
