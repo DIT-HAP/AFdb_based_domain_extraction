@@ -22,7 +22,8 @@ Segment coordinates are **1-based inclusive**; `length = end - start + 1`.
 
 ```
 config/config.yaml            Path roots, pinned resource versions, parameters
-workflow/Snakefile            Shared wildcard rules (one per CLI subcommand)
+workflow/Snakefile            Config root, stage includes, default target
+workflow/rules/<stage>.smk    Rules grouped by pipeline stage
 workflow/datasets/<ds>.smk    Dataset declarations (input paths, version)
 workflow/envs/                Driver environment and the shared rule environment
 src/                          Functional core + typer CLI

@@ -18,6 +18,14 @@ is `python-igraph=0.11.4`: version 1.0 produces a different Leiden partition
 (AF3 yielded 181 domains instead of 171). `pandas=2.2.3`, `numpy=1.26.4`, and
 `biopython=1.85` are the versions that reproduced the legacy tables exactly.
 
+## Workflow layout
+
+Rules are grouped by pipeline stage in `workflow/rules/`: `pae.smk`,
+`plddt.smk`, `domains.smk`, `external.smk`, `unify.smk`, and `dna.smk`. The
+root `Snakefile` only holds configuration, dataset declarations, includes, and
+`rule all`. Dataset-specific input paths and version labels live in
+`workflow/datasets/<dataset>.smk`.
+
 ## Resource policy
 
 - `resources/` holds small inputs that the pipeline reads directly and that are
