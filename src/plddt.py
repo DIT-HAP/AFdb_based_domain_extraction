@@ -29,7 +29,7 @@ from Bio.PDB.Structure import Structure
 import numpy as np
 import pandas as pd
 
-from src.files import write_tsv
+from src.files import AppConfig, read_tsv, require_columns, write_tsv
 
 # =============================================================================
 # 2. CONSTANTS
@@ -37,6 +37,7 @@ from src.files import write_tsv
 STRUCTURE_SUFFIXES = (".pdb.gz", ".cif.gz", ".cif", ".pdb")
 STRUCTURE_PRIORITY = (".pdb.gz", ".cif", ".cif.gz")
 IDENTIFIER_SEPARATOR = "-F1-"
+REGISTRY_REQUIRED = ["gene_systematic_id", "in_analysis", "structure_path"]
 
 
 # =============================================================================
@@ -111,6 +112,27 @@ def build_plddt_table(
         )
 
     table = pd.DataFrame.from_records(records).sort_values("uniprot_id", ignore_index=True)
+    write_tsv(table, output_path)
+
+
+def build_plddt_table_from_registry(
+    registry_path: Path, output_path: Path, app_config: AppConfig
+) -> None:
+    """Build the per-gene pLDDT table from the registry's selected structures."""
+    registry = read_tsv(registry_path)
+    require_columns(registry, REGISTRY_REQUIRED, registry_path)
+    selected = registry.loc[registry["in_analysis"]]
+    records: list[dict[str, object]] = []
+    for gene, spec in zip(selected["gene_systematic_id"], selected["structure_path"], strict=True):
+        values = extract_plddt(app_config.resolve(spec))
+        records.append(
+            {
+                "gene_systematic_id": gene,
+                "protein_length": len(values),
+                "pLDDT": ",".join(str(value) for value in values),
+            }
+        )
+    table = pd.DataFrame.from_records(records).sort_values("gene_systematic_id", ignore_index=True)
     write_tsv(table, output_path)
 
 

@@ -34,10 +34,20 @@ from src.dna import (
 )
 from src.external import build_ecod_table, build_ted_table
 from src.files import AppConfig, load_config, setup_logger, write_tsv
-from src.pae import build_domain_table, run_pae_to_domains
-from src.plddt import build_plddt_table
-from src.segments import annotate_table, build_confident_table, build_reformated_table
-from src.unify import combine_segments, unify_segments as build_unified_segments
+from src.pae import build_domain_table, run_pae_to_domains, run_pae_to_domains_from_registry
+from src.plddt import build_plddt_table, build_plddt_table_from_registry
+from src.registry import RegistryPaths, build_registry
+from src.segments import (
+    annotate_table,
+    build_confident_table,
+    build_reformated_table,
+    build_reformated_table_from_registry,
+)
+from src.unify import (
+    combine_segments,
+    unify_segments as build_unified_segments,
+    unify_segments_from_registry,
+)
 
 # =============================================================================
 # 2. CONSTANTS
@@ -95,6 +105,108 @@ def fetch_resources(
     manifest = _resource_manifest(load_config(config))
     write_tsv(manifest, output)
     logger.info(f"Resource manifest written to {output}")
+
+
+@app.command("build-registry")
+def build_registry_command(
+    merged_table: Path = typer.Option(..., help="Comparison merged table."),
+    afdb_entries: Path = typer.Option(..., help="AFdb entry table with entry roles."),
+    uniprot_triangulation: Path = typer.Option(..., help="UniProt triangulation snapshot."),
+    pombase_peptide: Path = typer.Option(..., help="PomBase peptide FASTA."),
+    afdb_dir: Path = typer.Option(..., help="AFdb v6 CIF directory."),
+    afdb_v4_dir: Path = typer.Option(..., help="AFdb v4 CIF directory for TED/ECOD coordinates."),
+    vdulab_structure_dir: Path = typer.Option(..., help="vDulab structure directory."),
+    vdulab_fasta_dir: Path = typer.Option(..., help="vDulab input FASTA directory."),
+    af3_structure_dir: Path = typer.Option(..., help="AF3 structure directory."),
+    output: Path = typer.Option(..., help="Registry output table."),
+    summary_output: Path = typer.Option(..., help="Selection summary output table."),
+    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
+) -> None:
+    """Build the per-gene structure registry."""
+    paths = RegistryPaths(
+        merged_table=merged_table,
+        afdb_entries=afdb_entries,
+        uniprot_triangulation=uniprot_triangulation,
+        pombase_peptide=pombase_peptide,
+        afdb_dir=afdb_dir,
+        afdb_v4_dir=afdb_v4_dir,
+        vdulab_structure_dir=vdulab_structure_dir,
+        vdulab_fasta_dir=vdulab_fasta_dir,
+        af3_structure_dir=af3_structure_dir,
+        output=output,
+        summary_output=summary_output,
+    )
+    build_registry(paths, load_config(config))
+
+
+@app.command("registry-pae-to-domains")
+def registry_pae_to_domains(
+    registry: Path = typer.Option(..., help="Gene structure registry."),
+    output_dir: Path = typer.Option(..., help="Directory for .domain files."),
+    jobs: int = typer.Option(1, min=1, help="Parallel worker processes."),
+    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
+) -> None:
+    """Cluster the PAE matrix selected for every registry gene."""
+    run_pae_to_domains_from_registry(registry, output_dir, jobs, load_config(config))
+
+
+@app.command("registry-domains-to-table")
+def registry_domains_to_table(
+    domains_dir: Path = typer.Option(..., help="Directory of .domain files."),
+    output: Path = typer.Option(..., help="Output PAE domain table."),
+) -> None:
+    """Collect registry .domain files into the PAE domain table."""
+    build_domain_table(domains_dir, output, id_column="gene_systematic_id")
+
+
+@app.command("registry-extract-plddt")
+def registry_extract_plddt(
+    registry: Path = typer.Option(..., help="Gene structure registry."),
+    output: Path = typer.Option(..., help="Output pLDDT table."),
+    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
+) -> None:
+    """Extract pLDDT for the structure selected for every registry gene."""
+    build_plddt_table_from_registry(registry, output, load_config(config))
+
+
+@app.command("registry-merge-domains")
+def registry_merge_domains(
+    pae_table: Path = typer.Option(..., help="PAE domain table."),
+    plddt_table: Path = typer.Option(..., help="pLDDT table."),
+    registry: Path = typer.Option(..., help="Gene structure registry."),
+    output: Path = typer.Option(..., help="Output reformatted domain table."),
+    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
+) -> None:
+    """Merge registry PAE clusters with pLDDT confidence."""
+    build_reformated_table_from_registry(
+        pae_table, plddt_table, registry, load_config(config).parameters, output
+    )
+
+
+@app.command("registry-unify-segments")
+def registry_unify_segments(
+    pae_table: Path = typer.Option(..., help="Annotated PAE table."),
+    ted_table: Path = typer.Option(..., help="PomBase TED table."),
+    ecod_table: Path = typer.Option(..., help="PomBase ECOD table."),
+    registry: Path = typer.Option(..., help="Gene structure registry."),
+    output: Path = typer.Option(..., help="Output unified segment table."),
+    dataset: str = typer.Option(..., help="Dataset identifier."),
+    pae_version: str = typer.Option(..., help="PAE model version label."),
+    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
+) -> None:
+    """Build the unified segment table from registry-selected domains."""
+    app_config = load_config(config)
+    unify_segments_from_registry(
+        pae_table,
+        ted_table,
+        ecod_table,
+        registry,
+        output,
+        dataset=dataset,
+        pae_source_version=pae_version,
+        ted_version=app_config.resources.ted_release,
+        ecod_version=app_config.resources.ecod_release,
+    )
 
 
 @app.command("pae-to-domains")

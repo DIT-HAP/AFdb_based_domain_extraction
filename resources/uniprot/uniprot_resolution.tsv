@@ -1,0 +1,101 @@
+query_accession	status	primary_accession	uniprot_id	reviewed	length	protein_name	is_secondary	primary_in_pombase	primary_in_afdb
+A0AAN2H660	found	Q9US43	UPP3_SCHPO	reviewed	189	Uracil phosphoribosyltransferase urg2	True	True	True
+A0AAN2H671	found	Q9UTF7	ELOH1_SCHPO	reviewed	327	Fatty acid elongase 1	True	True	True
+A0AAN2H683	found	Q9HE02	SSN2_SCHPO	reviewed	1185	Mediator of RNA polymerase II transcription subunit 13	True	True	True
+A0AAN2H698	found	Q8WZK5	ALY1_SCHPO	reviewed	504	Putative arrestin-related trafficking adapter aly1	True	True	True
+A0AAN2H6B6	found	P40385	TO6BL_SCHPO	reviewed	260	Meiotic recombination protein rec6	True	True	True
+A0AAN2H6C5	found	O59748	CTK2_SCHPO	reviewed	331	CTD kinase subunit beta	True	True	True
+A0AAN2H6E2	found	A0AAN2H6E2	TF210_SCHPO	reviewed	1332	Transposon Tf2-10 polyprotein	False	False	True
+A0AAN2H6F9	found	P78750	UTP18_SCHPO	reviewed	555	Probable U3 small nucleolar RNA-associated protein 18	True	True	True
+A0AAN2H6G1	found	O74372	DUO1_SCHPO	reviewed	282	DASH complex subunit duo1	True	True	True
+A0AAN2H6H5	found	A0AAN2H6H5	YC0K_SCHPO	reviewed	56	Uncharacterized protein SPCC4G3.20	False	False	True
+A0AAN2H6H8	found	Q9P7W4	POF10_SCHPO	reviewed	645	F-box/WD repeat-containing protein pof10	True	True	True
+A0AAN2H6I0	found	O60066	ALKB1_SCHPO	reviewed	297	tRNA demethylase abh1	True	True	True
+A0AAN2H6J4	found	O94524	GSTO2_SCHPO	reviewed	337	Glutathione S-transferase omega-like 2	True	True	True
+A0AAN2H6K0	found	Q9USX8	RU2A_SCHPO	reviewed	237	U2 small nuclear ribonucleoprotein A'	True	True	True
+A0AAN2H6K9	found	O94417	CWC26_SCHPO	reviewed	301	Pre-mRNA-splicing factor cwf26	True	True	True
+A0AAN2H6L4	found	P50525	APN1_SCHPO	reviewed	349	Apurinic-apyrimidinic endonuclease 1	True	False	True
+A0AAN2H6M4	found	Q9Y7S2	YQO3_SCHPO	reviewed	316	UPF0612 protein SPCC569.03	True	True	True
+A0AAN2H7J7	found	Q10492	PNN1_SCHPO	reviewed	192	Pinin homolog 1	True	True	True
+A0AAN2H7N4	found	Q09776	SNU23_SCHPO	reviewed	174	U4/U6.U5 small nuclear ribonucleoprotein component snu23	True	True	True
+A0AAN2H7N7	found	O74339	TAM41_SCHPO	reviewed	393	Phosphatidate cytidylyltransferase, mitochondrial	True	True	True
+A0AAN2H7Q5	found	Q9P7M8	NU184_SCHPO	reviewed	1628	Nucleoporin nup184	True	True	True
+A0AAN2H7Q7	found	Q9P7D6	YOFC_SCHPO	reviewed	184	UPF0303 protein SPBP4H10.12	True	True	True
+A0AAN2H7R6	found	Q09773	MUG62_SCHPO	reviewed	1487	Meiotically up-regulated gene 62 protein	True	True	True
+A0AAN2H7S7	found	P87318	YB2H_SCHPO	reviewed	127	Uncharacterized protein SPBC31F10.17c	True	True	True
+A0AAN2H7T3	found	Q9UT74	LYS4_SCHPO	reviewed	690	Homoaconitase, mitochondrial	True	True	True
+A0AAN2H7U4	found	O94599	YC8B_SCHPO	reviewed	505	LIMR family protein Lmb1	True	True	True
+A0AAN2H7Y5	found	P0CU25	YDPL_SCHPO	reviewed	182	Uncharacterized protein SPAC29A4.23	True	False	True
+A0AAN2H7Z2	found	Q09699	SNF5_SCHPO	reviewed	598	SWI/SNF chromatin-remodeling complex subunit snf5	True	True	True
+A0AAN2H813	found	P87142	SSZ1_SCHPO	reviewed	550	Heat shock protein 70 homolog Ssz1	True	True	True
+A0AAN2H818	found	Q9UST4	IF5A2_SCHPO	reviewed	157	Eukaryotic translation initiation factor 5A-2	True	True	True
+A0AAN2H837	found	O94255	CAN_SCHPO	reviewed	244	Carbonic anhydrase	True	True	True
+A0AAN2H850	found	Q10351	PIGS_SCHPO	reviewed	509	GPI transamidase component PIG-S homolog	True	True	True
+A0AAN2H855	found	Q9USH6	NAA40_SCHPO	reviewed	190	N-alpha-acetyltransferase 40	True	True	True
+A0AAN2H856	found	Q9P804	TRM1_SCHPO	reviewed	548	tRNA (guanine(26)-N(2))-dimethyltransferase	True	True	True
+A0AAN2H877	found	O13882	RT18_SCHPO	reviewed	177	Small ribosomal subunit protein uS11m	True	True	True
+A0AAN2H888	found	A0AAN2H888	YQJD_SCHPO	reviewed	132	Uncharacterized protein SPCC1840.13	False	False	True
+A0AAN2H896	found	P40382	CDT1_SCHPO	reviewed	422	Cell division cycle protein cdt1	True	True	True
+A0AAN2H8A8	found	A0AAN2H8A8	TF213_SCHPO	reviewed	1332	Transposon Tf2-13 polyprotein	False	False	True
+A0AAN2H8B3	found	Q96WW1	OMH5_SCHPO	reviewed	383	O-glycoside alpha-1,2-mannosyltransferase homolog 5	True	True	True
+A0AAN2H8I1	found	O74436	SRP68_SCHPO	reviewed	542	Signal recognition particle subunit srp68	True	True	True
+A0AAN2H8L1	found	O94409	WTF23_SCHPO	reviewed	368	Meiotic driver wtf23	True	True	True
+A0AAN2H8V2	found	Q09833	TRM2_SCHPO	reviewed	477	tRNA (uracil(54)-C(5))-methyltransferase trm2	True	True	True
+A0AAN2H904	found	Q9P6P2	RRP36_SCHPO	reviewed	279	rRNA biogenesis protein rrp36	True	True	True
+A0AAN2H954	found	O14006	RT09_SCHPO	reviewed	272	Small ribosomal subunit protein uS9m	True	True	True
+A0AAN2H9B4	found	Q09142	ORC2_SCHPO	reviewed	499	Origin recognition complex subunit 2	True	True	True
+A0AAN2H9C9	found	Q1MTR2	RNPS1_SCHPO	reviewed	207	Exon junction complex associated RNA-binding protein Rns1	True	True	True
+A0AAN2H9H5	found	Q9UU81	AP1G1_SCHPO	reviewed	836	AP-1 complex subunit gamma-1	True	True	True
+A0AAN2HA63	found	Q9UTC8	OS9_SCHPO	reviewed	288	Protein OS-9 homolog	True	True	True
+A0AAN2HA83	found	P87120	RPP1_SCHPO	reviewed	247	Ribonuclease P/MRP protein subunit rpp1	True	True	True
+A0AAN2HAH3	found	O42953	YGM4_SCHPO	reviewed	356	HMG box-containing protein SPBC19G7.04	True	True	True
+A0AAN2HAI6	found	Q9P382	NUP82_SCHPO	reviewed	798	Nucleoporin nup82	True	True	True
+A0AAN2HAN8	found	O94407	SEC65_SCHPO	reviewed	199	Signal recognition particle sec65 subunit	True	True	True
+A0AAN2HE77	found	Q10135	LSD2_SCHPO	reviewed	1235	Lysine-specific histone demethylase 2	True	True	True
+A0AAN2HEE3	found	O14123	NAH2_SCHPO	reviewed	778	Probable Na(+)/H(+) antiporter sod22	True	True	True
+A0AAN2HEL6	found	O13648	ANM3_SCHPO	reviewed	510	Ribosomal protein arginine N-methyltransferase rmt3	True	True	True
+A0AAN2HER6	found	P0CU26	INA17_SCHPO	reviewed	86	Inner membrane assembly complex subunit 17	True	True	True
+A0AAN2HET8	found	Q7Z9I5	WTF7_SCHPO	reviewed	215	Wtf element wtf7	True	True	True
+A0AAN2HEX1	found	O74486	WTF19_SCHPO	reviewed	393	Meiotic driver wtf19	True	True	True
+A0AAN2L0E2	found	Q9UUG8	TUP12_SCHPO	reviewed	570	Transcriptional repressor tup12	True	True	True
+A0AAN2L0F2	found	P78820	ACAC_SCHPO	reviewed	2247	Acetyl-CoA carboxylase	True	True	True
+A0AAN2L0G5	found	P0CF96	MZT1_SCHPO	reviewed	64	Mitotic-spindle organizing protein 1	True	True	True
+A0AAN2L0H4	found	Q10164	RGA2_SCHPO	reviewed	1229	Rho-type GTPase-activating protein 2	True	True	True
+A0AAN2L0K4	found	O42999	TOM7_SCHPO	reviewed	52	Mitochondrial import receptor subunit tom7	True	True	True
+A0AAN2L0L7	found	O60090	DBL3_SCHPO	reviewed	297	IMPACT family member dbl3	True	True	True
+A0AAN2L0N1	found	Q10202	DBP3_SCHPO	reviewed	529	ATP-dependent RNA helicase dbp3	True	True	True
+A0AAN2L2Z0	found	Q09903	DRS1_SCHPO	reviewed	714	ATP-dependent RNA helicase drs1	True	True	True
+A0AAN2L314	found	Q9P6L8	SRB8_SCHPO	reviewed	1148	Mediator of RNA polymerase II transcription subunit 12	True	True	True
+A0AAN2L356	found	P0CU24	YAOK_SCHPO	reviewed	28	Uncharacterized protein SPAC11D3.20	True	False	True
+A0AAN2L372	found	Q9Y7K7	TVP23_SCHPO	reviewed	200	Golgi apparatus membrane protein tvp23	True	True	True
+A0AAN2L382	found	Q9UTK4	NU189_SCHPO	reviewed	1807	Nucleoporin nup189	True	True	True
+A0AAN2L384	found	O74423	ENT1_SCHPO	reviewed	702	Epsin-1	True	True	True
+A0AAN2L388	found	O94443	REXO1_SCHPO	reviewed	623	Uncharacterized exonuclease C637.09	True	True	True
+A0AAN2L394	found	O94342	TGP1_SCHPO	reviewed	528	Plasma membrane glycerophosphodiester transmembrane transporter Tgp1	True	True	True
+A0AAN2L3A6	found	P87169	MAD1_SCHPO	reviewed	676	Spindle assembly checkpoint component Mad1	True	True	True
+A0AAN2L3C8	found	O14361	PHA2_SCHPO	reviewed	287	Putative prephenate dehydratase	True	True	True
+A0AAN2L3D8	found	Q9P3V0	WTF4_SCHPO	reviewed	366	Meiotic driver wtf4	True	True	True
+A0AAN2L3T9	found	Q09669	ADH4_SCHPO	reviewed	379	Alcohol dehydrogenase 4	True	True	True
+A0AAN2L3V1	found	O13899	CRLS1_SCHPO	reviewed	595	Cardiolipin synthase (CMP-forming) / mitochondrial hydrolase fusion protein	True	True	True
+A0AAN2L3W2	found	O14303	YE87_SCHPO	reviewed	403	Uncharacterized protein SPAC9G1.07	True	True	True
+A0AAN2L3Y4	found	Q10442	PET81_SCHPO	reviewed	266	Probable mitochondrial S-adenosylmethionine carrier protein pet801	True	True	True
+A0AAN2L432	found	O14355	HVA22_SCHPO	reviewed	166	ER membrane organization protein Hva22	True	True	True
+A0AAN2L5A4	found	Q10071	STE24_SCHPO	reviewed	444	Probable CAAX prenyl protease 1	True	True	True
+A0AAN2L5E0	found	Q9UTS5	ZAS1_SCHPO	reviewed	897	Transcriptional regulator zas1	True	True	True
+A0AAN2L5F2	found	O74742	FOLE_SCHPO	reviewed	486	Probable folylpolyglutamate synthase	True	True	True
+A0AAN2L5I6	found	O59786	HEMH_SCHPO	reviewed	423	Ferrochelatase, mitochondrial	True	True	True
+A0AAN2L5J7	found	O74420	WTF13_SCHPO	reviewed	388	Meiotic driver wtf13	True	True	True
+G2TRJ5	found	G2TRJ5	DMO2_SCHPO	reviewed	81	Mitochondrial protein-disulfide reductase dmo2	False	False	True
+G2TRK5	found	G2TRK5	YK35_SCHPO	reviewed	30	Putative uncharacterized protein SPAC110.05	False	False	True
+G2TRL1	found	G2TRL1	YLY4_SCHPO	reviewed	175	Uncharacterized protein C186.04c	False	False	True
+G2TRN7	found	G2TRN7	YM06_SCHPO	reviewed	147	Truncated RecQ DNA helicase-like protein C212.06c	False	False	True
+G2TRN8	found	G2TRN8	YI74_SCHPO	reviewed	155	Putative uncharacterized transporter C977.04	False	False	True
+O13886	found	O13886	TOM6_SCHPO	reviewed	48	Mitochondrial import receptor subunit TOM6	False	False	True
+O59742	found	O59742	CLU_SCHPO	reviewed	1173	Clustered mitochondria protein homolog	False	False	True
+P0CU21	found	P0CU21	YN5E_SCHPO	reviewed	75	Uncharacterized protein SPBC713.14c	False	False	True
+P0CU23	found	P0CU23	YKN6_SCHPO	reviewed	42	Uncharacterized protein SPAPB1A11.06	False	False	True
+P0CU24	found	P0CU24	YAOK_SCHPO	reviewed	28	Uncharacterized protein SPAC11D3.20	False	False	True
+P0CU25	found	P0CU25	YDPL_SCHPO	reviewed	182	Uncharacterized protein SPAC29A4.23	False	False	True
+P50525	found	P50525	APN1_SCHPO	reviewed	349	Apurinic-apyrimidinic endonuclease 1	False	False	True
+Q8NIP8	found	Q8NIP8	WTF12_SCHPO	reviewed	197	Uncharacterized protein wtf12	False	False	True
+Q8TFG1	found	Q8TFG1	GHT7_SCHPO	reviewed	518	Probable high-affinity hexose transporter ght7	False	False	True

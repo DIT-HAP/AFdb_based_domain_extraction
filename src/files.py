@@ -84,6 +84,17 @@ class AppConfig:
     resources: ResourcePaths
     parameters: PipelineParameters
 
+    def resolve(self, spec: str) -> Path:
+        """Resolve a prefixed path specification against the configured roots."""
+        roots = {
+            "cache": self.cache_root,
+            "reference": self.reference_root,
+            "legacy": self.legacy_root,
+            "raw": self.raw_root,
+            "project": self.project_root,
+        }
+        return _resolve_spec(spec, roots)
+
 
 # =============================================================================
 # 3. IMPERATIVE SHELL (Boundary Loading & TSV Access)
@@ -143,6 +154,20 @@ def load_config(config_path: Path) -> AppConfig:
             confident_merge_gap=int(parameters["confident_merge_gap"]),
         ),
     )
+
+
+PROTEIN_CODING = "protein coding gene"
+ACCESSION_COLUMNS = ("external_id", "uniprot_id")
+
+
+def load_gene_table(path: Path) -> pd.DataFrame:
+    """Load a PomBase gene table, normalize the accession column, keep coding genes."""
+    genes = read_tsv(path)
+    accession = next((column for column in ACCESSION_COLUMNS if column in genes.columns), None)
+    if accession is None:
+        raise ValueError(f"Missing accession column in {path}: {ACCESSION_COLUMNS}")
+    coding = genes.loc[genes["gene_type"] == PROTEIN_CODING]
+    return coding.rename(columns={accession: "uniprot_id"})
 
 
 def read_tsv(path: Path, **kwargs: Any) -> pd.DataFrame:

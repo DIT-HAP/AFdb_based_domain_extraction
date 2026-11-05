@@ -1,6 +1,6 @@
 # Custom Dulab2 predictions, 2024-09-04.
 DATASETS["vDulab2"] = {
-    "enabled": True,
+    "enabled": False,
     "version": "vDulab2",
     "source_version": "vDulab2_20240904",
     "pae_dir": resolve("raw:20240904_formated_results_vDulab2_noNaN/PAE_files"),

@@ -19,13 +19,23 @@ paths:
 # =============================================================================
 resources:
   pombase:
-    coding_release: "2023-07-01"
-    features_release: "2025-05-01"
-    gene_table: "project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"
-    peptide_stats: "project:resources/pombase/2023-07-01/PeptideStats.tsv"
-    gff3: "project:resources/pombase/2023-07-01/Schizosaccharomyces_pombe_all_chromosomes.gff3"
-    features_gene_table: "project:resources/pombase/2025-05-01/gene_IDs_names_products.tsv"
-    features_peptide_stats: "project:resources/pombase/2025-05-01/PeptideStats.tsv"
+    coding_release: "2026-06-01"
+    features_release: "2026-06-01"
+    gene_table: "project:resources/pombase/2026-06-01/gene_IDs_names_products.tsv"
+    peptide_stats: "project:resources/pombase/2026-06-01/PeptideStats.tsv"
+    gff3: "project:resources/pombase/2026-06-01/Schizosaccharomyces_pombe_all_chromosomes.gff3"
+    features_gene_table: "project:resources/pombase/2026-06-01/gene_IDs_names_products.tsv"
+    features_peptide_stats: "project:resources/pombase/2026-06-01/PeptideStats.tsv"
+  uniprot:
+    triangulation: "project:resources/uniprot/uniprot_triangulation_2026-06-01.tsv"
+    resolution: "project:resources/uniprot/uniprot_resolution.tsv"
+  registry:
+    afdb_dir: "reference:UP000002485_284812_SCHPO_v6"
+    afdb_pae_dir: "reference:PAE/UP000002485_284812_SCHPO_v6"
+    afdb_v4_dir: "cache:AlphaFold_Dataset/20230708_downloaded/UP000002485_284812_SCHPO_v4"
+    vdulab_structure_dir: "raw:20240305_predicted_results/vDulab"
+    vdulab_fasta_dir: "legacy:results/Fasta_for_customed_prediction"
+    af3_structure_dir: "raw:20241101_AF3_output/PDB"
   ted:
     release: "zenodo13908086"
     filtered_dump: "reference:TED/ted_365m.domain_summary.cath.globularity.taxid.tsv"

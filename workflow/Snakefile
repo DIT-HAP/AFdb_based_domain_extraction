@@ -72,6 +72,16 @@ include: "datasets/AFDB_20251107.smk"
 ENABLED_DATASETS = sorted(name for name, entry in DATASETS.items() if entry["enabled"])
 
 
+rule all:
+    default_target: True
+    input:
+        f"{RESULTS}/registry/gene_structure_registry.tsv",
+        f"{RESULTS}/curated/segments.tsv",
+        expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
+    output:
+        touch(f"{RESULTS}/.all_done"),
+
+
 def subset_flag(entry):
     """Render the optional --protein-subset flag for a dataset."""
     subset = entry.get("protein_subset")
@@ -88,9 +98,4 @@ include: "rules/domains.smk"
 include: "rules/external.smk"
 include: "rules/unify.smk"
 include: "rules/dna.smk"
-
-
-rule all:
-    input:
-        expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
-        f"{RESULTS}/combined/segments.tsv",
+include: "rules/registry.smk"

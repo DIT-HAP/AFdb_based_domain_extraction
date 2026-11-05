@@ -34,13 +34,28 @@ import igraph
 import numpy as np
 import pandas as pd
 
-from src.files import PipelineParameters, write_tsv
+from src.files import AppConfig, PipelineParameters, read_tsv, require_columns, write_tsv
+from src.registry import (
+    AF3_SOURCE,
+    AFDB_ALTERNATE,
+    AFDB_PRIMARY,
+    AFDB_SEQUENCE_MATCH,
+    VDULAB_SOURCE,
+)
 
 # =============================================================================
 # 2. CONSTANTS
 # =============================================================================
 DOMAIN_SUFFIX = ".domain"
 VERSION_SEPARATOR = "-F1-"
+REGISTRY_REQUIRED = ["gene_systematic_id", "in_analysis", "pae_path", "structure_source"]
+SOURCE_TAGS = {
+    AFDB_PRIMARY: "AFDBv6",
+    AFDB_SEQUENCE_MATCH: "AFDBv6",
+    AFDB_ALTERNATE: "AFDBv6",
+    VDULAB_SOURCE: "vDulab",
+    AF3_SOURCE: "vAF3",
+}
 
 
 # =============================================================================
@@ -129,7 +144,7 @@ def parse_domain_filename(name: str) -> tuple[str, str]:
     return uniprot_id, version
 
 
-def build_domain_table(domains_dir: Path, output_path: Path) -> None:
+def build_domain_table(domains_dir: Path, output_path: Path, id_column: str = "uniprot_id") -> None:
     """Collect every ``.domain`` file into the PAE domain table."""
     records: list[dict[str, object]] = []
     for path in sorted(domains_dir.glob(f"*{DOMAIN_SUFFIX}")):
@@ -154,10 +169,15 @@ def build_domain_table(domains_dir: Path, output_path: Path) -> None:
         columns=["uniprot_id", "version", "domain_id", "domain_residues", "protein_length"],
     )
     table = table.sort_values(["uniprot_id", "version", "domain_id"], ignore_index=True)
-    write_tsv(table, output_path)
+    write_tsv(table.rename(columns={"uniprot_id": id_column}), output_path)
 
 
-def process_pae_file(pae_path: Path, output_dir: Path, parameters: PipelineParameters) -> None:
+def process_pae_file(
+    pae_path: Path,
+    output_dir: Path,
+    parameters: PipelineParameters,
+    output_name: str | None = None,
+) -> None:
     """Cluster one PAE file and write its ``.domain`` output."""
     matrix = parse_pae(pae_path)
     clusters = cluster_pae_matrix(
@@ -166,7 +186,7 @@ def process_pae_file(pae_path: Path, output_dir: Path, parameters: PipelineParam
         pae_cutoff=parameters.pae_cutoff,
         resolution=parameters.resolution,
     )
-    output_path = output_dir / f"{pae_path.stem}{DOMAIN_SUFFIX}"
+    output_path = output_dir / (output_name or f"{pae_path.stem}{DOMAIN_SUFFIX}")
     write_domain_file(clusters, output_path)
 
 
@@ -193,6 +213,41 @@ def run_pae_to_domains(
     with ProcessPoolExecutor(max_workers=jobs) as pool:
         futures = [
             pool.submit(process_pae_file, path, output_dir, parameters) for path in pae_files
+        ]
+        for future in futures:
+            future.result()
+
+
+def run_pae_to_domains_from_registry(
+    registry_path: Path,
+    output_dir: Path,
+    jobs: int,
+    app_config: AppConfig,
+) -> None:
+    """Cluster the PAE matrix selected for every registry gene."""
+    registry = read_tsv(registry_path)
+    require_columns(registry, REGISTRY_REQUIRED, registry_path)
+    selected = registry.loc[registry["in_analysis"]]
+    output_names = (
+        "AF-"
+        + selected["gene_systematic_id"].astype(str)
+        + "-F1-model_"
+        + selected["structure_source"].map(SOURCE_TAGS)
+        + DOMAIN_SUFFIX
+    )
+    tasks = list(zip(selected["pae_path"].map(app_config.resolve), output_names, strict=True))
+    if not tasks:
+        raise FileNotFoundError(f"No registry rows to cluster in {registry_path}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if jobs <= 1:
+        for pae_path, output_name in tasks:
+            process_pae_file(pae_path, output_dir, app_config.parameters, output_name)
+        return
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        futures = [
+            pool.submit(process_pae_file, pae_path, output_dir, app_config.parameters, output_name)
+            for pae_path, output_name in tasks
         ]
         for future in futures:
             future.result()

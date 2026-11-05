@@ -9,12 +9,17 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
 
 ## Deliverables
 
-For each dataset (AFDB v4, vDulab, vDulab2, AF3, DY47073):
-
-- `results/<dataset>/segments.tsv` — unified long-format segment table with
+- `results/registry/gene_structure_registry.tsv` — one row per PomBase coding
+  gene (plus the AFdb-only entries), recording the selected structure, PAE
+  matrix, modelled sequence, coordinate basis, and analysis flag.
+- `results/curated/segments.tsv` — the canonical unified segment table with
   three sources: `PAE`, `TED`, `ECOD`.
-- `results/combined/segments.tsv` — all datasets concatenated, with `dataset`
-  as the first column.
+- `results/registry/comparison/` — the detailed AFdb-vs-PomBase tables, report,
+  and Excel workbook.
+
+The legacy per-dataset outputs (`AFDB_v4`, `vDulab`, `vDulab2`, `AF3`,
+`DY47073`) are retained as the v1 regression baseline and are disabled by
+default.
 
 Segment coordinates are **1-based inclusive**; `length = end - start + 1`.
 
@@ -74,13 +79,32 @@ releases:
 
 | Role | Release | Used for |
 |---|---|---|
-| PomBase coding | `2023-07-01` | Gene table, PeptideStats, GFF3 |
-| PomBase features | `2025-05-01` | TED/ECOD protein ID mapping |
-| AlphaFold DB | `2023-07-08` | AFDB v4 structures and PAE |
+| PomBase coding | `2026-06-01` | Gene table, PeptideStats, peptide FASTA, GFF3 |
+| PomBase features | `2026-06-01` | TED/ECOD protein ID mapping |
+| AlphaFold DB | v6 (hugedata) | Canonical structures and PAE |
+| AFdb v4 | `2023-07-08` | TED/ECOD coordinate validation only |
 | TED | Zenodo 13908086 | Domain assignments |
 | ECOD | `dpam_v5` | Domain assignments |
 
 ## Pipeline
+
+```
+AFdb v6 + PomBase 2026-06-01 ──compare-afdb-pombase──> comparison tables
+                                      │
+                                      v
+                    build-registry ──> gene_structure_registry.tsv
+                                      │
+        ┌─────────────────────────────┴─────────────────────────────┐
+        v                                                           v
+registry-pae-to-domains ──> *.domain ──registry-domains-to-table──> PAE table
+registry-extract-plddt ──────────────────────────────────────────> pLDDT table
+        └────────────── registry-merge-domains ────────────────────┘
+                                      │
+                                      v
+                    registry-unify-segments ──> results/curated/segments.tsv
+```
+
+The legacy per-dataset path is kept for regression testing:
 
 ```
 PAE JSON ──pae-to-domains──> *.domain ──domains-to-table──> <ds>_PAE_domain.tsv

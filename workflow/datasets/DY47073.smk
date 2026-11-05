@@ -1,6 +1,6 @@
 # Dulab2 predictions restricted to proteins present in the DY47073 annotation.
 DATASETS["DY47073"] = {
-    "enabled": True,
+    "enabled": False,
     "version": "vDulab2",
     "source_version": "vDulab2_20240904",
     "pae_dir": resolve("raw:20240904_formated_results_vDulab2_noNaN/PAE_files"),

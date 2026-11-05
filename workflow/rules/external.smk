@@ -3,7 +3,7 @@
 rule ted_pombe:
     input:
         ted_dump=TED_DUMP,
-        gene_table=FEATURES_GENE_TABLE,
+        gene_table=ancient(FEATURES_GENE_TABLE),
     output:
         f"{RESOURCES}/ted/pombe_ted_segments.tsv",
     params:
@@ -18,7 +18,7 @@ rule ted_pombe:
 rule ecod_pombe:
     input:
         ecod_dump=ECOD_DUMP,
-        gene_table=FEATURES_GENE_TABLE,
+        gene_table=ancient(FEATURES_GENE_TABLE),
     output:
         f"{RESOURCES}/ecod/pombe_ecod_segments.tsv",
     params:

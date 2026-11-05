@@ -73,6 +73,14 @@ TED_REQUIRED = ["ted_id", "uniprot_id", "consensus_level", "chopping", "plddt", 
 ECOD_REQUIRED = ["Protein", "Column2", "Range", "ID", "uniprot_id"]
 GENE_REQUIRED = ["uniprot_id", "gene_systematic_id", "gene_name"]
 STATS_REQUIRED = ["Systematic_ID", "Residues"]
+REGISTRY_REQUIRED = [
+    "gene_systematic_id",
+    "uniprot_id",
+    "gene_name",
+    "modeled_length",
+    "ted_ecod_coordinate_ok",
+    "in_analysis",
+]
 SOURCE_ORDER = ["PAE", "TED", "ECOD"]
 
 
@@ -221,6 +229,39 @@ def unify_segments(
     stats = read_tsv(stats_path)
     require_columns(genes, GENE_REQUIRED, gene_path)
     require_columns(stats, STATS_REQUIRED, stats_path)
+    annotated = attach_pombase_annotation(combined, genes, stats)
+    write_tsv(_sort_segments(annotated)[UNIFIED_COLUMNS], output_path)
+
+
+def unify_segments_from_registry(
+    pae_path: Path,
+    ted_path: Path,
+    ecod_path: Path,
+    registry_path: Path,
+    output_path: Path,
+    *,
+    dataset: str,
+    pae_source_version: str,
+    ted_version: str,
+    ecod_version: str,
+) -> None:
+    """Build the unified segment table from registry-selected domains."""
+    pae = load_pae_segments(pae_path, dataset, pae_source_version)
+    registry = read_tsv(registry_path)
+    require_columns(registry, REGISTRY_REQUIRED, registry_path)
+
+    coordinate_ok = registry.loc[registry["in_analysis"] & registry["ted_ecod_coordinate_ok"]]
+    dataset_proteins = set(coordinate_ok["uniprot_id"].astype(str))
+    ted = load_ted_segments(ted_path, dataset, ted_version)
+    ecod = load_ecod_segments(ecod_path, dataset, ecod_version)
+    ted = ted.loc[ted["uniprot_id"].astype(str).isin(dataset_proteins)]
+    ecod = ecod.loc[ecod["uniprot_id"].astype(str).isin(dataset_proteins)]
+    combined = pd.concat([pae, ted, ecod], ignore_index=True)
+
+    genes = registry[["uniprot_id", "gene_systematic_id", "gene_name"]]
+    stats = registry[["gene_systematic_id", "modeled_length"]].rename(
+        columns={"gene_systematic_id": "Systematic_ID", "modeled_length": "Residues"}
+    )
     annotated = attach_pombase_annotation(combined, genes, stats)
     write_tsv(_sort_segments(annotated)[UNIFIED_COLUMNS], output_path)
 

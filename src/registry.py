@@ -1,0 +1,512 @@
+"""
+Gene structure registry.
+========================
+
+Selects exactly one structure and one PAE matrix per PomBase protein-coding
+gene for the pinned PomBase 2026-06-01 / AFdb v6 comparison.
+
+Selection rules, in priority order:
+
+1. Identical PomBase and AFdb sequences use the AFdb v6 entry.
+2. Non-identical genes use any AFdb v6 entry (primary or alternate accession)
+   whose modelled sequence exactly matches the PomBase peptide.
+3. Remaining genes use the local vDulab prediction (2024-03-05) when its input
+   sequence matches the PomBase peptide.
+4. The three long proteins without vDulab use the local AF3 prediction
+   (2024-11-01).
+5. Everything else is excluded with an explicit reason; AFdb-only entries stay
+   in the table but never enter the downstream analysis.
+
+Input
+-----
+- Comparison tables from the AFdb/PomBase comparison stage.
+- PomBase 2026-06-01 peptide FASTA and gene table.
+- AFdb v6 CIF files, vDulab structures/PAE, AF3 structures/PAE.
+- UniProt triangulation snapshot for the ``relationship`` column.
+
+Output
+------
+- ``gene_structure_registry.tsv`` with one row per PomBase coding gene plus
+  the AFdb-only entries, and ``registry_summary.tsv`` with selection counts.
+"""
+
+# =============================================================================
+# 1. IMPORTS
+# =============================================================================
+from dataclasses import dataclass
+import gzip
+from pathlib import Path
+import re
+from typing import TextIO
+
+from Bio.Data.PDBData import protein_letters_3to1
+from Bio.PDB.MMCIFParser import MMCIFParser
+from loguru import logger
+import numpy as np
+import pandas as pd
+
+from src.files import AppConfig, read_tsv, require_columns, write_tsv
+
+# =============================================================================
+# 2. CONSTANTS & COLUMN CONTRACTS
+# =============================================================================
+CIF_SEQUENCE_KEY = "_entity_poly.pdbx_seq_one_letter_code_can"
+CIF_NAME_PATTERN = re.compile(r"^AF-(?P<accession>.+)-F\d+-model_v[^.]+\.cif(?:\.gz)?$")
+AFDB_PRIMARY = "AFDB_v6_primary"
+AFDB_SEQUENCE_MATCH = "AFDB_v6_sequence_match"
+AFDB_ALTERNATE = "AFDB_v6_alternate"
+VDULAB_SOURCE = "vDulab"
+AF3_SOURCE = "AF3"
+NO_SOURCE = "none"
+EXCLUSION_REASONS = {
+    "afdb_only_not_analysed",
+    "excluded_partial_structure",
+    "excluded_no_structure",
+    "excluded_prediction_sequence_mismatch",
+    "excluded_no_valid_prediction",
+}
+POMBASE_ONLY_NO_STRUCTURE = {
+    "SPBC460.01c",
+    "SPBC460.02c",
+    "SPBC460.03",
+    "SPBC460.04c",
+    "SPBC460.05",
+}
+PARTIAL_STRUCTURE_GENE = "SPAC23G3.02c"
+THIRD_VERSION_GENE = "SPCC569.03"
+NONIDENTICAL_CATEGORIES = {"substitution_only", "indel_only", "both"}
+
+MERGED_REQUIRED = [
+    "category",
+    "match_method",
+    "uniprot_id",
+    "afdb_accession",
+    "pombase_accession",
+    "gene_systematic_id",
+    "gene_name",
+    "gene_product",
+    "gene_type",
+    "afdb_description",
+    "afdb_length",
+    "pombase_length",
+    "length_delta",
+    "sequence_category",
+    "n_substitutions",
+    "n_afdb_extra",
+    "n_pombase_extra",
+    "identity_pct",
+    "duplicate_afdb_accessions",
+    "notes",
+]
+ENTRY_REQUIRED = ["afdb_accession", "protein_entity_accession"]
+TRIANGULATION_REQUIRED = ["gene_systematic_id", "relationship"]
+
+REGISTRY_COLUMNS = [
+    "gene_systematic_id",
+    "gene_name",
+    "gene_product",
+    "gene_type",
+    "uniprot_id",
+    "pombase_accession",
+    "afdb_accession",
+    "afdb_description",
+    "afdb_length",
+    "afdb_sequence",
+    "pombase_length",
+    "pombase_sequence",
+    "category",
+    "match_method",
+    "sequence_category",
+    "relationship",
+    "length_delta",
+    "n_substitutions",
+    "n_afdb_extra",
+    "n_pombase_extra",
+    "identity_pct",
+    "duplicate_afdb_accessions",
+    "selection_reason",
+    "in_analysis",
+    "exclusion_reason",
+    "structure_source",
+    "structure_id",
+    "structure_path",
+    "pae_path",
+    "modeled_length",
+    "structure_sequence",
+    "coordinate_basis",
+    "plddt_granularity",
+    "ted_ecod_coordinate_ok",
+    "notes",
+]
+
+
+# =============================================================================
+# 3. CONFIGURATION
+# =============================================================================
+@dataclass(kw_only=True, frozen=True)
+class RegistryPaths:
+    """Immutable paths and release labels for a registry build."""
+
+    merged_table: Path
+    afdb_entries: Path
+    uniprot_triangulation: Path
+    pombase_peptide: Path
+    afdb_dir: Path
+    afdb_v4_dir: Path
+    vdulab_structure_dir: Path
+    vdulab_fasta_dir: Path
+    af3_structure_dir: Path
+    output: Path
+    summary_output: Path
+
+
+# =============================================================================
+# 4. BOUNDARY LOADERS
+# =============================================================================
+def open_text(path: Path) -> TextIO:
+    """Open a plain or gzip-compressed text file."""
+    return gzip.open(path, "rt") if path.suffix == ".gz" else path.open("rt")
+
+
+def _header_sequence(path: Path) -> str:
+    """Read the modelled sequence from an AFdb CIF header when present."""
+    chunks: list[str] = []
+    in_sequence = False
+    with open_text(path) as handle:
+        for line in handle:
+            if in_sequence:
+                if line.strip() == ";":
+                    break
+                chunks.append(line.strip().lstrip(";"))
+            elif line.startswith(CIF_SEQUENCE_KEY):
+                remainder = line[len(CIF_SEQUENCE_KEY) :].strip()
+                if remainder and not remainder.startswith(";"):
+                    chunks.append(remainder)
+                    break
+                if remainder:
+                    chunks.append(remainder[1:])
+                in_sequence = True
+    return "".join(chunks)
+
+
+def _atom_sequence(path: Path) -> str:
+    """Read a CIF sequence from its CA atoms when the header omits it."""
+    with open_text(path) as handle:
+        structure = MMCIFParser(QUIET=True).get_structure(path.stem, handle)
+    return "".join(
+        protein_letters_3to1.get(residue.get_resname(), "X")
+        for residue in structure.get_residues()
+        if residue.has_id("CA")
+    )
+
+
+def read_cif_sequence(path: Path) -> str:
+    """Read the modelled sequence from a CIF header or its CA atoms."""
+    return _header_sequence(path) or _atom_sequence(path)
+
+
+def load_cif_sequences(directory: Path) -> dict[str, str]:
+    """Map every model accession in a directory to its modelled sequence."""
+    sequences: dict[str, str] = {}
+    for path in sorted(directory.glob("AF-*-model_v*.cif*")):
+        match = CIF_NAME_PATTERN.match(path.name)
+        if match is None:
+            raise ValueError(f"Unrecognised CIF filename: {path.name}")
+        sequences[match.group("accession")] = read_cif_sequence(path)
+    if not sequences:
+        raise FileNotFoundError(f"No CIF structures found in {directory}")
+    return sequences
+
+
+def load_peptides(path: Path) -> dict[str, str]:
+    """Map PomBase systematic gene ids to first-stop-truncated peptides."""
+    peptides: dict[str, str] = {}
+    with open_text(path) as handle:
+        identifier = ""
+        for line in handle:
+            if line.startswith(">"):
+                identifier = line[1:].split()[0].split(":")[0].rsplit(".", 1)[0]
+                peptides[identifier] = ""
+            else:
+                peptides[identifier] += line.strip()
+    return {gene: sequence.rstrip("*") for gene, sequence in peptides.items()}
+
+
+def load_gene_fastas(directory: Path) -> dict[str, str]:
+    """Map gene ids to the single sequence of their prediction FASTA."""
+    sequences: dict[str, str] = {}
+    for path in sorted(directory.rglob("*.fasta")):
+        records = path.read_text().split(">")[1:]
+        if len(records) != 1:
+            raise ValueError(f"Expected one record in {path.name}, found {len(records)}")
+        sequences[path.stem] = records[0].split("\n", 1)[1].replace("\n", "").rstrip("*")
+    return sequences
+
+
+def load_structure_ids(directory: Path, suffix: str, model_tag: str) -> list[str]:
+    """List the model identifiers of one custom prediction directory."""
+    pattern = f"AF-*-F1-model_{model_tag}.{suffix}"
+    return [
+        path.name.removeprefix("AF-").split("-F1-")[0] for path in sorted(directory.glob(pattern))
+    ]
+
+
+# =============================================================================
+# 5. FUNCTIONAL CORE
+# =============================================================================
+def _match_afdb_entries(
+    merged: pd.DataFrame,
+    entries: pd.DataFrame,
+    entry_sequences: dict[str, str],
+) -> pd.DataFrame:
+    """Return the unique AFdb entry whose sequence equals the PomBase peptide."""
+    candidates = merged.loc[
+        merged["sequence_category"].isin(NONIDENTICAL_CATEGORIES),
+        ["gene_systematic_id", "uniprot_id", "pombase_sequence"],
+    ]
+    lookup = entries[["afdb_accession", "protein_entity_accession"]].assign(
+        entry_sequence=lambda frame: frame["afdb_accession"].map(entry_sequences)
+    )
+    matches = candidates.merge(
+        lookup,
+        left_on="uniprot_id",
+        right_on="protein_entity_accession",
+        how="inner",
+    )
+    exact = matches.loc[matches["pombase_sequence"] == matches["entry_sequence"]]
+    if exact["gene_systematic_id"].duplicated().any():
+        raise ValueError("More than one exact AFdb entry found for a gene")
+    return exact[["gene_systematic_id", "afdb_accession"]]
+
+
+def _match_vdulab(
+    merged: pd.DataFrame,
+    stems: list[str],
+    fasta_sequences: dict[str, str],
+) -> pd.DataFrame:
+    """Return genes whose vDulab input sequence equals the PomBase peptide."""
+    available = merged[["gene_systematic_id", "uniprot_id", "pombase_sequence"]].copy()
+    available["vDulab_id"] = available["uniprot_id"].where(available["uniprot_id"].isin(stems))
+    available["vdulab_sequence"] = available["gene_systematic_id"].map(fasta_sequences)
+    matched = available.loc[
+        available["vDulab_id"].notna()
+        & (available["pombase_sequence"] == available["vdulab_sequence"]),
+        ["gene_systematic_id", "vDulab_id", "vdulab_sequence"],
+    ]
+    return matched.rename(
+        columns={"vDulab_id": "structure_id", "vdulab_sequence": "structure_sequence"}
+    )
+
+
+def _match_af3(
+    merged: pd.DataFrame,
+    stems: list[str],
+    structure_sequences: dict[str, str],
+) -> pd.DataFrame:
+    """Return genes whose AF3 modelled sequence equals the PomBase peptide."""
+    available = merged[["gene_systematic_id", "uniprot_id", "pombase_sequence"]].copy()
+    available["AF3_id"] = available["uniprot_id"].where(available["uniprot_id"].isin(stems))
+    available["af3_sequence"] = available["AF3_id"].map(structure_sequences)
+    matched = available.loc[
+        available["AF3_id"].notna() & (available["pombase_sequence"] == available["af3_sequence"]),
+        ["gene_systematic_id", "AF3_id", "af3_sequence"],
+    ]
+    return matched.rename(columns={"AF3_id": "structure_id", "af3_sequence": "structure_sequence"})
+
+
+def _selection_reason(
+    merged: pd.DataFrame,
+    exact_afdb: pd.DataFrame,
+    vdulab: pd.DataFrame,
+    af3: pd.DataFrame,
+) -> np.ndarray:
+    """Assign one selection reason per row with named boolean masks."""
+    is_afdb_only = merged["category"] == "afdb_only"
+    is_identical = merged["sequence_category"] == "identical"
+    has_exact_afdb = merged["gene_systematic_id"].isin(exact_afdb["gene_systematic_id"])
+    has_vdulab = merged["gene_systematic_id"].isin(vdulab["gene_systematic_id"])
+    has_af3 = merged["gene_systematic_id"].isin(af3["gene_systematic_id"])
+    is_partial = merged["gene_systematic_id"] == PARTIAL_STRUCTURE_GENE
+    has_no_structure = merged["gene_systematic_id"].isin(POMBASE_ONLY_NO_STRUCTURE)
+    is_third_version = merged["gene_systematic_id"] == THIRD_VERSION_GENE
+
+    conditions = [
+        is_afdb_only,
+        is_identical,
+        has_exact_afdb,
+        has_vdulab,
+        has_af3,
+        is_partial,
+        has_no_structure,
+        is_third_version,
+    ]
+    choices = [
+        "afdb_only_not_analysed",
+        AFDB_PRIMARY,
+        AFDB_ALTERNATE,
+        VDULAB_SOURCE,
+        AF3_SOURCE,
+        "excluded_partial_structure",
+        "excluded_no_structure",
+        "excluded_prediction_sequence_mismatch",
+    ]
+    return np.select(conditions, choices, default="excluded_no_valid_prediction")
+
+
+def _attach_structure(
+    registry: pd.DataFrame,
+    exact_afdb: pd.DataFrame,
+    vdulab: pd.DataFrame,
+    af3: pd.DataFrame,
+    entry_sequences: dict[str, str],
+    v4_sequences: dict[str, str],
+) -> pd.DataFrame:
+    """Attach the selected structure id and modelled sequence to every row."""
+    exact = exact_afdb.rename(columns={"afdb_accession": "structure_id"})
+    exact["structure_sequence"] = exact["structure_id"].map(entry_sequences)
+    sources = pd.concat([exact, vdulab, af3], ignore_index=True)
+    sources = sources.drop_duplicates("gene_systematic_id", keep="first")
+
+    result = registry.merge(sources, on="gene_systematic_id", how="left")
+    is_primary = result["selection_reason"].eq(AFDB_PRIMARY)
+    is_sequence_match = is_primary & result["match_method"].eq("sequence")
+    result["structure_source"] = np.select(
+        [
+            is_primary & ~is_sequence_match,
+            is_sequence_match,
+            result["selection_reason"].eq(AFDB_ALTERNATE),
+            result["selection_reason"].eq(VDULAB_SOURCE),
+            result["selection_reason"].eq(AF3_SOURCE),
+        ],
+        [AFDB_PRIMARY, AFDB_SEQUENCE_MATCH, AFDB_ALTERNATE, VDULAB_SOURCE, AF3_SOURCE],
+        default=NO_SOURCE,
+    )
+    result["structure_id"] = result["afdb_entry_id"].where(is_primary, result["structure_id"])
+    result["structure_sequence"] = (
+        result["afdb_entry_id"].map(entry_sequences).where(is_primary, result["structure_sequence"])
+    )
+    result["modeled_length"] = result["structure_sequence"].str.len().astype("Int64")
+    result["coordinate_basis"] = np.select(
+        [
+            result["structure_source"].isin([AFDB_PRIMARY, AFDB_SEQUENCE_MATCH]),
+            result["structure_source"].eq(AFDB_ALTERNATE),
+            result["structure_source"].isin([VDULAB_SOURCE, AF3_SOURCE]),
+        ],
+        ["UniProt", "PomBase", "PomBase"],
+        default="",
+    )
+    result["plddt_granularity"] = np.where(
+        result["structure_source"].eq(AF3_SOURCE), "atom_ca", "residue"
+    )
+    no_source = result["structure_source"].eq(NO_SOURCE)
+    result.loc[no_source, ["coordinate_basis", "plddt_granularity"]] = None
+    result["in_analysis"] = ~result["selection_reason"].isin(EXCLUSION_REASONS)
+    result["ted_ecod_coordinate_ok"] = (
+        result["structure_sequence"].eq(result["uniprot_id"].map(v4_sequences))
+        & result["in_analysis"]
+    )
+    result["exclusion_reason"] = np.where(result["in_analysis"], "", result["selection_reason"])
+    return result
+
+
+def _attach_paths(registry: pd.DataFrame) -> pd.DataFrame:
+    """Build config-resolvable structure and PAE paths for each selected source."""
+    structure_id = registry["structure_id"]
+    source = registry["structure_source"]
+    is_afdb = source.isin([AFDB_PRIMARY, AFDB_SEQUENCE_MATCH, AFDB_ALTERNATE])
+    is_vdulab = source.eq(VDULAB_SOURCE)
+    is_af3 = source.eq(AF3_SOURCE)
+    registry["structure_path"] = np.select(
+        [is_afdb, is_vdulab, is_af3],
+        [
+            "reference:UP000002485_284812_SCHPO_v6/AF-" + structure_id + "-F1-model_v6.cif.gz",
+            "raw:20240305_predicted_results/vDulab/AF-" + structure_id + "-F1-model_vDulab.pdb.gz",
+            "raw:20241101_AF3_output/PDB/AF-" + structure_id + "-F1-model_vAF3.cif",
+        ],
+        default="",
+    )
+    registry["pae_path"] = np.select(
+        [is_afdb, is_vdulab, is_af3],
+        [
+            "reference:PAE/UP000002485_284812_SCHPO_v6/AF-"
+            + structure_id
+            + "-F1-predicted_aligned_error_v6.json",
+            "raw:20240305_predicted_results/PAE_files/AF-"
+            + structure_id
+            + "-F1-predicted_aligned_error_vDulab.json",
+            "raw:20241101_AF3_output/PAE_files/AF-"
+            + structure_id
+            + "-F1-predicted_aligned_error_vAF3.json",
+        ],
+        default="",
+    )
+    return registry
+
+
+# =============================================================================
+# 6. IMPERATIVE SHELL
+# =============================================================================
+def _missing_paths(specs: pd.Series, app_config: AppConfig) -> list[str]:
+    """Return the path specifications that do not resolve to an existing file."""
+    return [spec for spec in specs if not app_config.resolve(spec).exists()]
+
+
+def _validate_selection(registry: pd.DataFrame, app_config: AppConfig) -> None:
+    """Fail fast when a selected row lacks a readable structure or PAE file."""
+    selected = registry.loc[registry["in_analysis"]]
+    missing_structure = _missing_paths(selected["structure_path"], app_config)
+    missing_pae = _missing_paths(selected["pae_path"], app_config)
+    if missing_structure or missing_pae:
+        raise FileNotFoundError(
+            f"Missing selected files: structures={missing_structure[:5]}, PAE={missing_pae[:5]}"
+        )
+
+
+def build_registry(config: RegistryPaths, app_config: AppConfig) -> None:
+    """Build and write the gene structure registry and its summary."""
+    merged = read_tsv(config.merged_table)
+    entries = read_tsv(config.afdb_entries)
+    triangulation = read_tsv(config.uniprot_triangulation)
+    require_columns(merged, MERGED_REQUIRED, config.merged_table)
+    require_columns(entries, ENTRY_REQUIRED, config.afdb_entries)
+    require_columns(triangulation, TRIANGULATION_REQUIRED, config.uniprot_triangulation)
+
+    peptides = load_peptides(config.pombase_peptide)
+    entry_sequences = load_cif_sequences(config.afdb_dir)
+    v4_sequences = load_cif_sequences(config.afdb_v4_dir)
+    af3_sequences = load_cif_sequences(config.af3_structure_dir)
+    vdulab_sequences = load_gene_fastas(config.vdulab_fasta_dir)
+    vdulab_stems = load_structure_ids(config.vdulab_structure_dir, "pdb.gz", VDULAB_SOURCE)
+    af3_stems = load_structure_ids(config.af3_structure_dir, "cif", "vAF3")
+
+    registry = merged.assign(
+        afdb_entry_id=lambda frame: frame["afdb_accession"].str.split(";").str[0],
+        pombase_sequence=lambda frame: frame["gene_systematic_id"].map(peptides),
+    )
+    registry["afdb_sequence"] = registry["afdb_entry_id"].map(entry_sequences)
+    relationship = triangulation.set_index("gene_systematic_id")["relationship"]
+    registry["relationship"] = registry["gene_systematic_id"].map(relationship)
+
+    exact_afdb = _match_afdb_entries(registry, entries, entry_sequences)
+    vdulab = _match_vdulab(registry, vdulab_stems, vdulab_sequences)
+    af3 = _match_af3(registry, af3_stems, af3_sequences)
+
+    registry["selection_reason"] = _selection_reason(registry, exact_afdb, vdulab, af3)
+    registry = _attach_structure(registry, exact_afdb, vdulab, af3, entry_sequences, v4_sequences)
+    registry = _attach_paths(registry)
+    _validate_selection(registry, app_config)
+
+    output = registry[REGISTRY_COLUMNS].sort_values("gene_systematic_id", ignore_index=True)
+    write_tsv(output, config.output)
+
+    summary = (
+        output.groupby(["selection_reason", "structure_source", "in_analysis"], dropna=False)
+        .size()
+        .reset_index(name="count")
+        .sort_values("count", ascending=False, ignore_index=True)
+    )
+    write_tsv(summary, config.summary_output)
+    logger.info(
+        f"Registry written to {config.output}: {int(output['in_analysis'].sum()):,} "
+        f"of {len(output):,} rows in analysis"
+    )

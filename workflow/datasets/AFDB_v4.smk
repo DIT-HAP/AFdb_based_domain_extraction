@@ -1,6 +1,6 @@
 # AlphaFold DB release 2023-07-08, UP000002485_284812_SCHPO_v4.
 DATASETS["AFDB_v4"] = {
-    "enabled": True,
+    "enabled": False,
     "version": "v4",
     "source_version": "AFDB_v4_20230708",
     "pae_dir": resolve("cache:AlphaFold_Dataset/20230708_downloaded/PAE_files"),

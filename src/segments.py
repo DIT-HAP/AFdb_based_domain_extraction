@@ -39,6 +39,15 @@ from src.plddt import check_overlap, domain_stats, merge_intervals
 PAE_REQUIRED = ["uniprot_id", "version", "domain_id", "domain_residues", "protein_length"]
 PLDDT_REQUIRED = ["uniprot_id", "protein_length", "pLDDT"]
 GENE_REQUIRED = ["gene_systematic_id", "uniprot_id"]
+REGISTRY_REQUIRED = ["gene_systematic_id", "uniprot_id"]
+REGISTRY_PAE_REQUIRED = [
+    "gene_systematic_id",
+    "version",
+    "domain_id",
+    "domain_residues",
+    "protein_length",
+]
+REGISTRY_PLDDT_REQUIRED = ["gene_systematic_id", "protein_length", "pLDDT"]
 GROUP_KEYS = ["uniprot_id", "version", "protein_length"]
 STAT_COLUMNS = ["domain_length", "mean_pLDDT", "fraction_gt_70"]
 REFORMATED_COLUMNS = [
@@ -212,6 +221,28 @@ def _join_gene_annotation(
     return result.rename(columns={"gene_systematic_id": "Systematic ID"})
 
 
+def _join_registry_annotation(frame: pd.DataFrame, registry: pd.DataFrame) -> pd.DataFrame:
+    """Attach the registry's gene id and primary accession."""
+    numbered = frame.rename(columns={"uniprot_id": "gene_systematic_id"})
+    annotation = registry[["gene_systematic_id", "uniprot_id"]]
+    result = annotation.merge(numbered, on="gene_systematic_id", how="right")
+    return result.rename(columns={"gene_systematic_id": "Systematic ID"})
+
+
+def build_reformated_frame(
+    pae: pd.DataFrame,
+    plddt: pd.DataFrame,
+    parameters: PipelineParameters,
+) -> pd.DataFrame:
+    """Merge PAE clusters with pLDDT confidence into one reformatted frame."""
+    lookup = build_plddt_lookup(plddt)
+    merged = pae.merge(plddt[["uniprot_id", "protein_length"]], on=["uniprot_id", "protein_length"])
+    merged = attach_stats(merged, lookup, parameters.plddt_threshold)
+    exploded = _merge_groups(merged, parameters)
+    numbered = _sort_and_number(exploded)
+    return attach_stats(numbered, lookup, parameters.plddt_threshold)
+
+
 # =============================================================================
 # 4. IMPERATIVE SHELL (I/O Orchestration)
 # =============================================================================
@@ -248,15 +279,30 @@ def build_reformated_table(
     require_columns(plddt, PLDDT_REQUIRED, plddt_path)
     require_columns(genes, GENE_REQUIRED, gene_path)
 
-    lookup = build_plddt_lookup(plddt)
-    merged = pae.merge(plddt[["uniprot_id", "protein_length"]], on=["uniprot_id", "protein_length"])
-    merged = attach_stats(merged, lookup, parameters.plddt_threshold)
-
-    exploded = _merge_groups(merged, parameters)
-    numbered = _sort_and_number(exploded)
-    numbered = attach_stats(numbered, lookup, parameters.plddt_threshold)
-
+    numbered = build_reformated_frame(pae, plddt, parameters)
     annotated = _join_gene_annotation(numbered, genes, fill_missing=True)
+    write_tsv(annotated[REFORMATED_COLUMNS], output_path)
+
+
+def build_reformated_table_from_registry(
+    pae_path: Path,
+    plddt_path: Path,
+    registry_path: Path,
+    parameters: PipelineParameters,
+    output_path: Path,
+) -> None:
+    """Merge registry-selected PAE clusters with pLDDT and attach gene metadata."""
+    pae = read_tsv(pae_path)
+    plddt = read_tsv(plddt_path)
+    registry = read_tsv(registry_path)
+    require_columns(pae, REGISTRY_PAE_REQUIRED, pae_path)
+    require_columns(plddt, REGISTRY_PLDDT_REQUIRED, plddt_path)
+    require_columns(registry, REGISTRY_REQUIRED, registry_path)
+
+    pae = pae.rename(columns={"gene_systematic_id": "uniprot_id"})
+    plddt = plddt.rename(columns={"gene_systematic_id": "uniprot_id"})
+    numbered = build_reformated_frame(pae, plddt, parameters)
+    annotated = _join_registry_annotation(numbered, registry)
     write_tsv(annotated[REFORMATED_COLUMNS], output_path)
 
 

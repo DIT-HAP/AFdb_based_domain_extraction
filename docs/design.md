@@ -7,11 +7,36 @@ role instead of pinning one global release:
 
 | Role | Version | Why |
 |---|---|---|
-| PomBase coding | `2023-07-01` | Gene table, PeptideStats, GFF3 used by the PAE branch |
-| PomBase features | `2025-05-01` | Protein ID mapping for the TED/ECOD subsets |
-| AlphaFold DB | `2023-07-08` | AFDB v4 structures and PAE |
+| PomBase coding | `2026-06-01` | Gene table, PeptideStats, peptide FASTA, GFF3 |
+| PomBase features | `2026-06-01` | Protein ID mapping for the TED/ECOD subsets |
+| AlphaFold DB | v6 (hugedata) | Canonical structures and PAE |
+| AFdb v4 | `2023-07-08` | Only for TED/ECOD coordinate validation |
 | TED | Zenodo 13908086 | Domain assignments |
 | ECOD | `dpam_v5` | Domain assignments |
+
+The legacy `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, and `DY47073` datasets are
+declared but disabled; they remain as the v1 regression baseline. The
+canonical output comes from the gene structure registry.
+
+## Gene structure registry
+
+The registry selects exactly one structure and one PAE matrix per PomBase
+protein-coding gene:
+
+| Rule | Genes |
+|---|---:|
+| Identical PomBase/AFdb sequence | 5,008 (AFdb v6 primary, including 9 sequence-matched entries) |
+| AFdb v6 entry whose sequence equals PomBase | 62 (alternate accession) |
+| vDulab prediction whose input equals PomBase | 46 (38 non-identical + 8 long proteins) |
+| AF3 prediction (long proteins without vDulab) | 3 (dhc1, tra2, mdn1) |
+| Excluded | 7 (SPCC569.03, sib1, B5BP45-49) |
+| AFdb-only (annotated, not analysed) | 16 |
+
+`in_analysis` is true for 5,119 genes. The registry also records
+`structure_sequence`, `modeled_length`, `coordinate_basis`, and
+`ted_ecod_coordinate_ok`. The TED/ECOD flag is exact sequence equality between
+the AFdb v4 model and the selected structure; genes with a v4/v6 difference
+are excluded from TED/ECOD rather than risking coordinate drift.
 
 Python dependencies are pinned in `workflow/envs/core.yaml`. The critical pin
 is `python-igraph=0.11.4`: version 1.0 produces a different Leiden partition

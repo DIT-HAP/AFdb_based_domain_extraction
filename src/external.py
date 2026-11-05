@@ -27,7 +27,7 @@ import re
 
 import pandas as pd
 
-from src.files import read_tsv, require_columns, write_tsv
+from src.files import load_gene_table, write_tsv
 
 # =============================================================================
 # 2. CONSTANTS
@@ -76,9 +76,8 @@ TED_ID_PATTERN = re.compile(r"AF-([A-Za-z0-9]+)-F")
 # 3. FUNCTIONAL CORE
 # =============================================================================
 def load_pombase_uniprot_ids(gene_path: Path) -> set[str]:
-    """Load the non-empty UniProt identifiers from a PomBase gene table."""
-    genes = read_tsv(gene_path)
-    require_columns(genes, ["uniprot_id"], gene_path)
+    """Load the non-empty UniProt identifiers of PomBase protein-coding genes."""
+    genes = load_gene_table(gene_path)
     return set(genes["uniprot_id"].dropna().astype(str))
 
 
