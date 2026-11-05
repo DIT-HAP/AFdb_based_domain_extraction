@@ -4,10 +4,18 @@
 # stage selects one structure and PAE matrix per gene; the curated rules run
 # PAE clustering, pLDDT extraction, domain merging, and unification from that
 # registry alone.
+#
+# Output paths carry the result-index number from docs/results_index.md.
 
-REGISTRY = f"{RESULTS}/registry"
-COMPARISON = f"{REGISTRY}/comparison"
-CURATED = f"{RESULTS}/curated"
+COMPARISON = f"{RESULTS}/01_comparison"
+REGISTRY_TABLE = f"{RESULTS}/02_gene_structure_registry.tsv"
+REGISTRY_SUMMARY = f"{RESULTS}/03_registry_summary.tsv"
+PAE_DOMAINS = f"{RESULTS}/04_domains"
+PAE_TABLE = f"{RESULTS}/05_PAE_domain.tsv"
+PLDDT_TABLE = f"{RESULTS}/06_pLDDT_scores.tsv"
+REFORMATED_TABLE = f"{RESULTS}/07_reformated_PAE_domain.tsv"
+ANNOTATED_TABLE = f"{RESULTS}/08_annotated_PAE_domain.tsv"
+SEGMENTS_TABLE = f"{RESULTS}/09_segments.tsv"
 COMPARE_SCRIPT = str(PROJECT_ROOT / "scripts" / "compare_afdb_pombase.py")
 POMBASE_2026 = str(PROJECT_ROOT / "resources" / "pombase" / "2026-06-01")
 UNIPROT_TRIANGULATION = resolve(config["resources"]["uniprot"]["triangulation"])
@@ -25,16 +33,16 @@ rule compare_afdb_pombase:
         triangulation=UNIPROT_TRIANGULATION,
         resolution=UNIPROT_RESOLUTION,
     output:
-        merged=f"{COMPARISON}/merged_table.tsv",
-        entries=f"{COMPARISON}/afdb_entries.tsv",
-        shared=f"{COMPARISON}/shared_comparison.tsv",
-        by_sequence=f"{COMPARISON}/shared_by_sequence.tsv",
-        nonidentical=f"{COMPARISON}/nonidentical_pairs.tsv",
-        afdb_only=f"{COMPARISON}/afdb_only.tsv",
-        pombase_only=f"{COMPARISON}/pombase_only.tsv",
-        counts=f"{COMPARISON}/summary_counts.tsv",
-        report=f"{COMPARISON}/report.md",
-        workbook=f"{COMPARISON}/afdb_vs_pombase.xlsx",
+        merged=f"{COMPARISON}/01_merged_table.tsv",
+        entries=f"{COMPARISON}/02_afdb_entries.tsv",
+        shared=f"{COMPARISON}/03_shared_comparison.tsv",
+        by_sequence=f"{COMPARISON}/04_shared_by_sequence.tsv",
+        nonidentical=f"{COMPARISON}/05_nonidentical_pairs.tsv",
+        afdb_only=f"{COMPARISON}/06_afdb_only.tsv",
+        pombase_only=f"{COMPARISON}/07_pombase_only.tsv",
+        counts=f"{COMPARISON}/08_summary_counts.tsv",
+        report=f"{COMPARISON}/09_report.md",
+        workbook=f"{COMPARISON}/10_afdb_vs_pombase.xlsx",
     params:
         script=COMPARE_SCRIPT,
         pombase_dir=POMBASE_2026,
@@ -55,8 +63,8 @@ rule build_registry:
         entries=rules.compare_afdb_pombase.output.entries,
         triangulation=UNIPROT_TRIANGULATION,
     output:
-        registry=f"{REGISTRY}/gene_structure_registry.tsv",
-        summary=f"{REGISTRY}/registry_summary.tsv",
+        registry=REGISTRY_TABLE,
+        summary=REGISTRY_SUMMARY,
     params:
         cli=str(CLI),
         config=str(CONFIG_PATH),
@@ -83,7 +91,7 @@ rule registry_pae_to_domains:
     input:
         registry=rules.build_registry.output.registry,
     output:
-        domains=directory(f"{CURATED}/domains"),
+        domains=directory(PAE_DOMAINS),
     params:
         cli=str(CLI),
         config=str(CONFIG_PATH),
@@ -101,7 +109,7 @@ rule registry_domains_to_table:
     input:
         rules.registry_pae_to_domains.output.domains,
     output:
-        table=f"{CURATED}/PAE_domain.tsv",
+        table=PAE_TABLE,
     params:
         cli=str(CLI),
     conda:
@@ -114,7 +122,7 @@ rule registry_extract_plddt:
     input:
         registry=rules.build_registry.output.registry,
     output:
-        table=f"{CURATED}/pLDDT_scores.tsv",
+        table=PLDDT_TABLE,
     params:
         cli=str(CLI),
         config=str(CONFIG_PATH),
@@ -131,7 +139,7 @@ rule registry_merge_domains:
         plddt_table=rules.registry_extract_plddt.output.table,
         registry=rules.build_registry.output.registry,
     output:
-        table=f"{CURATED}/reformated_PAE_domain.tsv",
+        table=REFORMATED_TABLE,
     params:
         cli=str(CLI),
         config=str(CONFIG_PATH),
@@ -147,7 +155,7 @@ rule registry_assign_type:
     input:
         rules.registry_merge_domains.output.table,
     output:
-        table=f"{CURATED}/annotated_PAE_domain.tsv",
+        table=ANNOTATED_TABLE,
     params:
         cli=str(CLI),
         config=str(CONFIG_PATH),
@@ -165,7 +173,7 @@ rule registry_unify_segments:
         ecod_table=ancient(f"{RESOURCES}/ecod/pombe_ecod_segments.tsv"),
         registry=rules.build_registry.output.registry,
     output:
-        f"{CURATED}/segments.tsv",
+        SEGMENTS_TABLE,
     params:
         cli=str(CLI),
         config=str(CONFIG_PATH),

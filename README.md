@@ -9,13 +9,16 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
 
 ## Deliverables
 
-- `results/registry/gene_structure_registry.tsv` — one row per PomBase coding
+- `results/02_gene_structure_registry.tsv` — one row per PomBase coding
   gene (plus the AFdb-only entries), recording the selected structure, PAE
   matrix, modelled sequence, coordinate basis, and analysis flag.
-- `results/curated/segments.tsv` — the canonical unified segment table with
+- `results/09_segments.tsv` — the canonical unified segment table with
   three sources: `PAE`, `TED`, `ECOD`.
-- `results/registry/comparison/` — the detailed AFdb-vs-PomBase tables, report,
+- `results/01_comparison/` — the detailed AFdb-vs-PomBase tables, report,
   and Excel workbook.
+
+`docs/results_index.md` numbers every output file, its row count, the producing
+rule (`R#`), and the script (`S#`).
 
 The legacy per-dataset outputs (`AFDB_v4`, `vDulab`, `vDulab2`, `AF3`,
 `DY47073`) are retained as the v1 regression baseline and are disabled by
@@ -28,8 +31,8 @@ Segment coordinates are **1-based inclusive**; `length = end - start + 1`.
 ```
 config/config.yaml            Path roots, pinned resource versions, parameters
 workflow/Snakefile            Config root, stage includes, default target
-workflow/rules/<stage>.smk    Rules grouped by pipeline stage
-workflow/datasets/<ds>.smk    Dataset declarations (input paths, version)
+workflow/rules/<nn>_<stage>.smk    Rules grouped by pipeline stage
+workflow/datasets/<nn>_<ds>.smk    Dataset declarations (input paths, version)
 workflow/envs/                Driver environment and the shared rule environment
 src/                          Functional core + typer CLI
 scripts/afdb_domains.py       Thin executable shell
@@ -101,7 +104,7 @@ registry-extract-plddt ───────────────────
         └────────────── registry-merge-domains ────────────────────┘
                                       │
                                       v
-                    registry-unify-segments ──> results/curated/segments.tsv
+                    registry-unify-segments ──> results/09_segments.tsv
 ```
 
 The legacy per-dataset path is kept for regression testing:

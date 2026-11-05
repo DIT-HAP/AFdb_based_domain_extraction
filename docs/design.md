@@ -45,11 +45,12 @@ is `python-igraph=0.11.4`: version 1.0 produces a different Leiden partition
 
 ## Workflow layout
 
-Rules are grouped by pipeline stage in `workflow/rules/`: `pae.smk`,
-`plddt.smk`, `domains.smk`, `external.smk`, `unify.smk`, and `dna.smk`. The
-root `Snakefile` only holds configuration, dataset declarations, includes, and
-`rule all`. Dataset-specific input paths and version labels live in
-`workflow/datasets/<dataset>.smk`.
+Rules are grouped by pipeline stage in `workflow/rules/`: `01_registry.smk`
+(canonical chain), `02_pae.smk`, `03_plddt.smk`, `04_domains.smk`,
+`05_external.smk`, `06_unify.smk`, and `07_dna.smk`. The root `Snakefile` only
+holds configuration, dataset declarations, includes, and `rule all`.
+Dataset-specific input paths and version labels live in
+`workflow/datasets/<nn>_<dataset>.smk` (D1–D6 in `docs/results_index.md`).
 
 ## Resource policy
 

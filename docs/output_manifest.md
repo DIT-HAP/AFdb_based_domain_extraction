@@ -1,6 +1,7 @@
 # Legacy output manifest
 
-Inventory of everything in the v1 `results/` tree and its status in v2.
+Inventory of everything in the v1 `results/` tree and its status in v2. For the
+numbered inventory of the active outputs, see [results_index.md](results_index.md).
 
 The v1 repository is tagged `v1-legacy` and remains the read-only reference
 baseline. Nothing is deleted from it.
@@ -23,9 +24,9 @@ Datasets covered: `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, `DY47073`.
 
 | Group | v2 files | Producer |
 |---|---|---|
-| AFdb/PomBase comparison | `results/registry/comparison/*` | `compare-afdb-pombase` |
-| Gene structure registry | `results/registry/gene_structure_registry.tsv` | `build-registry` |
-| Curated unified segments | `results/curated/segments.tsv` | `registry-unify-segments` |
+| AFdb/PomBase comparison | `results/01_comparison/*` | `compare-afdb-pombase` |
+| Gene structure registry | `results/02_gene_structure_registry.tsv` | `build-registry` |
+| Curated unified segments | `results/09_segments.tsv` | `registry-unify-segments` |
 | Unified segment table per dataset (legacy) | `results/<dataset>/segments.tsv` | `unify-segments` |
 | Combined segment table (legacy) | `results/combined/segments.tsv` | `combine-segments` |
 | Resource provenance | `resources/manifest.tsv` | `fetch-resources` |

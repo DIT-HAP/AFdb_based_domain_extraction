@@ -40,16 +40,17 @@ Input
 
 Output
 ------
-- ``afdb_vs_pombase.xlsx``: multi-sheet workbook with the merged table and
+- ``01_merged_table.tsv``: unified shared/AFdb-only/PomBase-only table.
+- ``02_afdb_entries.tsv``: AFdb v6 entry inventory.
+- ``03_shared_comparison.tsv``: one row per ID-matched shared gene pair.
+- ``04_shared_by_sequence.tsv``: shared pairs matched by exact sequence.
+- ``05_nonidentical_pairs.tsv``: shared pairs with non-identical sequences.
+- ``06_afdb_only.tsv``: AFdb-only accessions with exact-match evidence.
+- ``07_pombase_only.tsv``: PomBase-only genes with lengths and reasons.
+- ``08_summary_counts.tsv``: headline counts.
+- ``09_report.md``: human-readable difference report.
+- ``10_afdb_vs_pombase.xlsx``: multi-sheet workbook with the merged table and
   per-category sheets.
-- ``report.md``: human-readable difference report.
-- ``summary_counts.tsv``: headline counts.
-- ``merged_table.tsv``: unified shared/AFdb-only/PomBase-only table.
-- ``shared_comparison.tsv``: one row per ID-matched shared gene pair.
-- ``shared_by_sequence.tsv``: shared pairs matched by exact sequence.
-- ``nonidentical_pairs.tsv``: shared pairs with non-identical sequences.
-- ``afdb_only.tsv``: AFdb-only accessions with exact-match evidence.
-- ``pombase_only.tsv``: PomBase-only genes with lengths and reasons.
 - ``dy47073_comparison.tsv``: per-gene three-way comparison (optional).
 - ``dy47073_only.tsv``: DY47073 proteins outside the PomBase coding set (optional).
 - ``afdb_only_dy47073.tsv``: AFdb-only entries matched to DY47073 (optional).
@@ -1745,7 +1746,7 @@ def render_sequence_section(shared_comparison: pd.DataFrame, counts: dict[str, i
 {substitution_table}
 
 非一致蛋白共 {len(nonidentical):,} 个。下表按差异位点数排序,
-列出前 30 个(完整表见 `nonidentical_pairs.tsv`):
+列出前 30 个(完整表见 `05_nonidentical_pairs.tsv`):
 
 {table}
 
@@ -2154,7 +2155,7 @@ def render_recommendations(
 1. **主分析集**:使用 {counts["shared_accessions"]:,} 个 ID 匹配的共有 accession,
    对应 {counts["shared_genes"]:,} 个基因;加上 {counts["shared_by_sequence_genes"]:,} 个
    序列匹配基因,合并表共有 {counts["merged_shared_rows"]:,} 个 shared 行。
-   下游以 `results/registry/gene_structure_registry.tsv` 的 `in_analysis` 为准。
+   下游以 `results/02_gene_structure_registry.tsv` 的 `in_analysis` 为准。
 2. **AFdb-only 条目**:{counts["afdb_only_matching_shared"]:,} 个与共有蛋白序列完全相同。
    其中 12 个与 primary 序列相同(真正的重复);62 个是序列与 PomBase 精确一致的替代条目,
    在注册表中作为这些基因的首选结构。{counts["afdb_only_no_match"]:,} 个无 PomBase
@@ -2282,13 +2283,15 @@ def write_tables(
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
     nonidentical = shared_comparison.loc[shared_comparison[ComparisonCol.CATEGORY] != "identical"]
-    nonidentical.to_csv(config.output_dir / "nonidentical_pairs.tsv", sep="\t", index=False)
-    shared_comparison.to_csv(config.output_dir / "shared_comparison.tsv", sep="\t", index=False)
-    shared_by_sequence.to_csv(config.output_dir / "shared_by_sequence.tsv", sep="\t", index=False)
-    merged.to_csv(config.output_dir / "merged_table.tsv", sep="\t", index=False)
-    afdb_entry_table.to_csv(config.output_dir / "afdb_entries.tsv", sep="\t", index=False)
-    afdb_only.to_csv(config.output_dir / "afdb_only.tsv", sep="\t", index=False)
-    pombase_only.to_csv(config.output_dir / "pombase_only.tsv", sep="\t", index=False)
+    nonidentical.to_csv(config.output_dir / "05_nonidentical_pairs.tsv", sep="\t", index=False)
+    shared_comparison.to_csv(config.output_dir / "03_shared_comparison.tsv", sep="\t", index=False)
+    shared_by_sequence.to_csv(
+        config.output_dir / "04_shared_by_sequence.tsv", sep="\t", index=False
+    )
+    merged.to_csv(config.output_dir / "01_merged_table.tsv", sep="\t", index=False)
+    afdb_entry_table.to_csv(config.output_dir / "02_afdb_entries.tsv", sep="\t", index=False)
+    afdb_only.to_csv(config.output_dir / "06_afdb_only.tsv", sep="\t", index=False)
+    pombase_only.to_csv(config.output_dir / "07_pombase_only.tsv", sep="\t", index=False)
     if dy_result is not None:
         comparison_columns = [*DY47073_COMPARISON_COLUMNS, DyCol.SEQUENCE.value]
         dy_result.comparison.loc[:, comparison_columns].to_csv(
@@ -2301,7 +2304,7 @@ def write_tables(
             config.output_dir / "afdb_only_dy47073.tsv", sep="\t", index=False
         )
     pd.DataFrame({"metric": list(counts), "value": list(counts.values())}).to_csv(
-        config.output_dir / "summary_counts.tsv", sep="\t", index=False
+        config.output_dir / "08_summary_counts.tsv", sep="\t", index=False
     )
 
 
@@ -2319,7 +2322,7 @@ def write_excel(
     """Write the multi-sheet Excel workbook."""
     summary = pd.DataFrame({"metric": list(counts), "value": list(counts.values())})
     shared = merged.loc[merged["category"] == "shared"]
-    workbook_path = config.output_dir / "afdb_vs_pombase.xlsx"
+    workbook_path = config.output_dir / "10_afdb_vs_pombase.xlsx"
 
     with pd.ExcelWriter(workbook_path, engine=EXCEL_ENGINE) as writer:
         summary.to_excel(writer, sheet_name="summary", index=False)
@@ -2552,12 +2555,12 @@ def main() -> int:
         report = render_report(
             shared_comparison, afdb_only, pombase_only, counts, config, dy_result
         )
-        (config.output_dir / "report.md").write_text(report, encoding="utf-8")
+        (config.output_dir / "09_report.md").write_text(report, encoding="utf-8")
     except (OSError, ValueError, KeyError) as error:
         logger.exception(f"Fatal execution error: {error}")
         return 1
     else:
-        logger.info(f"Report written to {config.output_dir / 'report.md'}")
+        logger.info(f"Report written to {config.output_dir / '09_report.md'}")
         return 0
 
 
