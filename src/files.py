@@ -21,6 +21,7 @@ Output
 # =============================================================================
 # 1. IMPORTS
 # =============================================================================
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -181,7 +182,7 @@ def write_tsv(frame: pd.DataFrame, path: Path, **kwargs: Any) -> None:
     frame.to_csv(path, sep="\t", index=False, **kwargs)
 
 
-def require_columns(frame: pd.DataFrame, required: list[str], source: Path) -> None:
+def require_columns(frame: pd.DataFrame, required: Sequence[str], source: Path) -> None:
     """Fail fast when a boundary input is missing required columns."""
     missing = sorted(set(required) - set(frame.columns))
     if missing:

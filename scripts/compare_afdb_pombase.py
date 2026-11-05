@@ -13,12 +13,13 @@ The comparison has three levels:
 3. Sequence agreement, classified as identical, substitution-only,
    indel-only, or both (alignment-derived).
 
-AFdb sequences are read from the modelled CIF entity sequence
-(``_entity_poly.pdbx_seq_one_letter_code_can``); PomBase sequences are read
+AFdb sequences are read from the entry inventory table produced by the
+``afdb-entry-table`` stage (modelled CIF entity sequence
+``_entity_poly.pdbx_seq_one_letter_code_can``); PomBase sequences are read
 from ``peptide.fa`` and truncated at the first stop codon. AFdb-only entries
 are additionally matched to PomBase peptides by exact sequence, which
 separates obsolete/secondary UniProt accessions from genuinely AFdb-specific
-proteins. The PAE directory is checked for one-to-one accession pairing.
+proteins. The inventory also records PAE availability per entry.
 
 When a DY47073 protein FASTA is supplied, the report adds a third annotation
 layer. DY47073 records are resolved to PomBase gene IDs, collapsed per gene,
@@ -30,8 +31,7 @@ protein are reported separately.
 
 Input
 -----
-- AFdb directory containing ``AF-<accession>-F<n>-model_v6.cif.gz`` files.
-- AFdb PAE directory containing ``AF-<accession>-F<n>-predicted_aligned_error_v6.json``.
+- AFdb v6 entry inventory (``03_afdb_entries.tsv``).
 - PomBase release directory containing ``gene_IDs_names_products.tsv`` and
   ``peptide.fa[.gz]``.
 - Optional DY47073 protein FASTA (one protein record per gene or isoform).
@@ -41,7 +41,7 @@ Input
 Output
 ------
 - ``01_merged_table.tsv``: unified shared/AFdb-only/PomBase-only table.
-- ``02_afdb_entries.tsv``: AFdb v6 entry inventory.
+- ``02_afdb_entry_roles.tsv``: AFdb v6 entry roles against the protein entities.
 - ``03_shared_comparison.tsv``: one row per ID-matched shared gene pair.
 - ``04_shared_by_sequence.tsv``: shared pairs matched by exact sequence.
 - ``05_nonidentical_pairs.tsv``: shared pairs with non-identical sequences.
@@ -59,8 +59,8 @@ Usage
 -----
     DY=tmp/afdb_vs_pombase/reference/dy47073
     python compare_afdb_pombase.py \
-        --afdb-dir /hugedata/YushengYang/AFdb/UP000002485_284812_SCHPO_v6 \
-        --pae-dir /hugedata/YushengYang/AFdb/PAE/UP000002485_284812_SCHPO_v6 \
+        --afdb-entries results/01_afdb/03_afdb_entries.tsv \
+        --afdb-source /hugedata/YushengYang/AFdb/UP000002485_284812_SCHPO_v6 \
         --pombase-dir tmp/afdb_vs_pombase/reference/pombase-2026-11-01 \
         --output-dir tmp/afdb_vs_pombase/outputs \
         --dy47073-fasta "$DY/S_pombe_DY47073.liftoff_braker3_polished_240717_protein.fasta" \
@@ -95,10 +95,13 @@ import pandas as pd
 # =============================================================================
 PROTEIN_CODING = "protein coding gene"
 ACCESSION_COLUMN_ALIASES = ("external_id", "uniprot_id")
-CIF_SEQUENCE_KEY = "_entity_poly.pdbx_seq_one_letter_code_can"
-CIF_DESCRIPTION_KEY = "_entity.pdbx_description"
-CIF_NAME_PATTERN = re.compile(r"^AF-(?P<accession>.+)-F\d+-model_v\d+\.cif\.gz$")
-PAE_NAME_PATTERN = re.compile(r"^AF-(?P<accession>.+)-F\d+-predicted_aligned_error_v\d+\.json$")
+AFDB_ENTRY_COLUMNS = [
+    "afdb_accession",
+    "afdb_description",
+    "afdb_length",
+    "afdb_sequence",
+    "pae_available",
+]
 UNIPROT_RESOLUTION_COLUMNS = [
     "query_accession",
     "is_secondary",
@@ -298,8 +301,8 @@ class DyCol(StrEnum):
 class Config:
     """Immutable runtime configuration container."""
 
-    afdb_dir: Path
-    pae_dir: Path
+    afdb_entries: Path
+    afdb_source: str
     pombase_dir: Path
     output_dir: Path
     pombase_release: str
@@ -331,78 +334,34 @@ def open_text(path: Path) -> TextIO:
     return path.open("rt")
 
 
-def read_cif_header_sequence(handle: TextIO) -> tuple[str, str]:
-    """Read the entity description and modelled sequence from an AFdb CIF header."""
-    description = ""
-    sequence_chunks: list[str] = []
-    in_sequence = False
+def load_afdb_entries(path: Path) -> pd.DataFrame:
+    """Load the AFdb entry inventory with the comparison column names."""
+    inventory = pd.read_csv(path, sep="\t", dtype=str)
+    missing = set(AFDB_ENTRY_COLUMNS) - set(inventory.columns)
+    if missing:
+        raise ValueError(f"Missing AFdb entry columns in {path}: {sorted(missing)}")
 
-    for line in handle:
-        if in_sequence:
-            if line.strip() == ";":
-                break
-            sequence_chunks.append(line.strip().lstrip(";"))
-        elif line.startswith(CIF_SEQUENCE_KEY):
-            remainder = line[len(CIF_SEQUENCE_KEY) :].strip()
-            if remainder and not remainder.startswith(";"):
-                sequence_chunks.append(remainder)
-                break
-            if remainder:
-                sequence_chunks.append(remainder[1:])
-            in_sequence = True
-        elif line.startswith(CIF_DESCRIPTION_KEY):
-            description = line.split(None, 1)[1].strip().strip('"')
-
-    return description, "".join(sequence_chunks)
+    inventory = inventory.loc[:, AFDB_ENTRY_COLUMNS]
+    inventory = inventory.rename(columns={"afdb_accession": AfdbCol.ACCESSION})
+    inventory[AfdbCol.LENGTH] = pd.to_numeric(inventory[AfdbCol.LENGTH]).astype("Int64")
+    logger.info(f"Loaded {len(inventory):,} AFdb entries from {path}")
+    return inventory
 
 
-def parse_afdb_cif(path: Path) -> dict[str, str]:
-    """Extract accession, protein description, and modelled sequence from one AFdb CIF."""
-    name_match = CIF_NAME_PATTERN.match(path.name)
-    if name_match is None:
-        raise ValueError(f"Unrecognised AFdb CIF filename: {path.name}")
-
-    with gzip.open(path, "rt") as handle:
-        description, sequence = read_cif_header_sequence(handle)
-    if not sequence:
-        raise ValueError(f"Empty sequence parsed from {path.name}")
-
-    return {
-        AfdbCol.ACCESSION: name_match.group("accession"),
-        AfdbCol.DESCRIPTION: description,
-        AfdbCol.SEQUENCE: sequence,
-    }
+def load_pae_accessions(entries: pd.DataFrame) -> set[str]:
+    """Return the accessions flagged as having a PAE matrix."""
+    pae_available = entries.loc[entries["pae_available"] == "True", AfdbCol.ACCESSION]
+    logger.info(f"Found {len(pae_available):,} AFdb entries with PAE")
+    return set(pae_available)
 
 
-def load_afdb_entries(afdb_dir: Path) -> pd.DataFrame:
-    """Load every AFdb model as one row of accession, description, and sequence."""
-    paths = sorted(afdb_dir.glob("AF-*-F*-model_v*.cif.gz"))
-    if not paths:
-        raise FileNotFoundError(f"No AFdb CIF files found under {afdb_dir}")
-
-    entries = pd.DataFrame.from_records([parse_afdb_cif(path) for path in paths])
-    entries[AfdbCol.LENGTH] = entries[AfdbCol.SEQUENCE].str.len()
-    unexpected = set("".join(entries[AfdbCol.SEQUENCE])) - STANDARD_AMINO_ACIDS
-    if unexpected:
-        logger.warning(f"Non-standard residues in AFdb sequences: {sorted(unexpected)}")
-    logger.info(f"Parsed {len(entries)} AFdb CIF files from {afdb_dir}")
-    return entries
-
-
-def load_pae_accessions(pae_dir: Path) -> set[str]:
-    """Return the accessions that have a PAE JSON file."""
-    paths = sorted(pae_dir.glob("AF-*-F*-predicted_aligned_error_v*.json"))
-    if not paths:
-        raise FileNotFoundError(f"No PAE JSON files found under {pae_dir}")
-
-    accessions: set[str] = set()
-    for path in paths:
-        name_match = PAE_NAME_PATTERN.match(path.name)
-        if name_match is None:
-            raise ValueError(f"Unrecognised PAE filename: {path.name}")
-        accessions.add(name_match.group("accession"))
-    logger.info(f"Found {len(accessions)} PAE JSON files under {pae_dir}")
-    return accessions
+def load_afdb_inputs(path: Path) -> tuple[pd.DataFrame, set[str]]:
+    """Load the comparison columns and the PAE accession set from one inventory."""
+    inventory = load_afdb_entries(path)
+    entries = inventory.loc[
+        :, [AfdbCol.ACCESSION, AfdbCol.DESCRIPTION, AfdbCol.SEQUENCE, AfdbCol.LENGTH]
+    ]
+    return entries, load_pae_accessions(inventory)
 
 
 def load_uniprot_resolution(path: Path, pombase_accessions: set[str]) -> pd.DataFrame:
@@ -2155,7 +2114,7 @@ def render_recommendations(
 1. **主分析集**:使用 {counts["shared_accessions"]:,} 个 ID 匹配的共有 accession,
    对应 {counts["shared_genes"]:,} 个基因;加上 {counts["shared_by_sequence_genes"]:,} 个
    序列匹配基因,合并表共有 {counts["merged_shared_rows"]:,} 个 shared 行。
-   下游以 `results/02_gene_structure_registry.tsv` 的 `in_analysis` 为准。
+   下游以 `results/04_gene_structure_registry.tsv` 的 `in_analysis` 为准。
 2. **AFdb-only 条目**:{counts["afdb_only_matching_shared"]:,} 个与共有蛋白序列完全相同。
    其中 12 个与 primary 序列相同(真正的重复);62 个是序列与 PomBase 精确一致的替代条目,
    在注册表中作为这些基因的首选结构。{counts["afdb_only_no_match"]:,} 个无 PomBase
@@ -2191,7 +2150,7 @@ def render_report(
     header = f"""{title}
 
 生成日期:{date.today().isoformat()}
-AFdb 数据:`{config.afdb_dir}`
+AFdb 数据:`{config.afdb_source}`
 PomBase 数据:`{config.pombase_dir}`(release `{config.pombase_release}`)
 {dy_header}
 """
@@ -2214,8 +2173,10 @@ PomBase 数据:`{config.pombase_dir}`(release `{config.pombase_release}`)
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--afdb-dir", type=Path, required=True, help="AFdb CIF directory.")
-    parser.add_argument("--pae-dir", type=Path, required=True, help="AFdb PAE JSON directory.")
+    parser.add_argument("--afdb-entries", type=Path, required=True, help="AFdb entry inventory.")
+    parser.add_argument(
+        "--afdb-source", required=True, help="AFdb source label for the report header."
+    )
     parser.add_argument(
         "--pombase-dir", type=Path, required=True, help="PomBase release directory."
     )
@@ -2254,8 +2215,8 @@ def parse_args() -> argparse.Namespace:
 def build_config(args: argparse.Namespace) -> Config:
     """Build the immutable runtime configuration from parsed CLI arguments."""
     return Config(
-        afdb_dir=args.afdb_dir.resolve(),
-        pae_dir=args.pae_dir.resolve(),
+        afdb_entries=args.afdb_entries.resolve(),
+        afdb_source=args.afdb_source,
         pombase_dir=args.pombase_dir.resolve(),
         output_dir=args.output_dir.resolve(),
         pombase_release=args.pombase_release,
@@ -2289,7 +2250,7 @@ def write_tables(
         config.output_dir / "04_shared_by_sequence.tsv", sep="\t", index=False
     )
     merged.to_csv(config.output_dir / "01_merged_table.tsv", sep="\t", index=False)
-    afdb_entry_table.to_csv(config.output_dir / "02_afdb_entries.tsv", sep="\t", index=False)
+    afdb_entry_table.to_csv(config.output_dir / "02_afdb_entry_roles.tsv", sep="\t", index=False)
     afdb_only.to_csv(config.output_dir / "06_afdb_only.tsv", sep="\t", index=False)
     pombase_only.to_csv(config.output_dir / "07_pombase_only.tsv", sep="\t", index=False)
     if dy_result is not None:
@@ -2432,8 +2393,7 @@ def main() -> int:
     config = build_config(args)
 
     try:
-        afdb_entries = load_afdb_entries(config.afdb_dir)
-        pae_accessions = load_pae_accessions(config.pae_dir)
+        afdb_entries, pae_accessions = load_afdb_inputs(config.afdb_entries)
         gene_catalog = load_pombase_gene_catalog(config.pombase_dir)
         pombase_genes = gene_catalog.loc[
             gene_catalog[GeneCol.GENE_TYPE] == PROTEIN_CODING

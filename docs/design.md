@@ -45,14 +45,29 @@ is `python-igraph=0.11.4`: version 1.0 produces a different Leiden partition
 
 ## Workflow layout
 
-Rules are grouped by pipeline stage in `workflow/rules/`: `01_registry.smk`
-(canonical chain), `02_pae.smk`, `03_plddt.smk`, `04_domains.smk`,
-`05_external.smk`, `06_unify.smk`, and `07_dna.smk`. The root `Snakefile` only
-holds configuration, includes, and `rule all`. Dataset-specific input paths
-and version labels live at the top of `02_pae.smk`, the entry point of the
-legacy per-dataset chain (D1–D5 in `docs/results_index.md`). The unused
-`AFDB_20251107` declaration was dropped; the canonical registry reads the v6
-structures through `config/config.yaml`.
+Rules are grouped by pipeline stage, one file per stage, in `workflow/rules/`:
+
+| File | Stage |
+|---|---|
+| `01_afdb.smk` | AFdb CIF/PAE inventory (`afdb_cif_entries`, `afdb_pae_index`, `afdb_entry_table`) |
+| `02_uniprot.smk` | Manual UniProt snapshot refresh (not in `rule all`) |
+| `03_compare.smk` | AFdb vs PomBase comparison |
+| `04_registry.smk` | Gene structure registry |
+| `05_curated.smk` | PAE clustering through unified segments |
+| `06_pae.smk` | Legacy dataset declarations and PAE rules (D1–D5) |
+| `07_plddt.smk`–`11_dna.smk` | Legacy pLDDT, domain, external, unification, DNA branches |
+
+The root `Snakefile` holds the configuration, the shared numbered result path
+constants, the stage includes, and `rule all`. Dataset-specific input paths
+and version labels live at the top of `06_pae.smk`, the entry point of the
+legacy per-dataset chain. The unused `AFDB_20251107` declaration was dropped;
+the canonical registry reads the v6 structures through `config/config.yaml`.
+
+The AFdb inventory is produced once and cached, so the comparison and registry
+no longer parse 5,196 gzip CIF headers themselves. `03_afdb_entries.tsv`
+carries `afdb_accession`, `afdb_description`, `afdb_length`, `afdb_sequence`,
+`cif_file`, `pae_available`, and `pae_file`. The join starts from the CIF
+inventory; PAE files without a CIF entry are reported and ignored.
 
 ## Resource policy
 
@@ -69,6 +84,12 @@ structures through `config/config.yaml`.
   workflow alone.
 - `fetch-resources` records size and SHA-256 (files under 50MB) for every
   configured resource.
+- The two UniProt tables stay committed snapshots. `02_uniprot.smk` adds
+  `refresh_uniprot_triangulation` and `refresh_uniprot_resolution`; both are
+  manual rules outside `rule all`, write minimal-column candidates to
+  `results/02_uniprot/`, and require a prior comparison run for their query
+  list. Promotion (copy to `resources/uniprot/`, update `config/config.yaml`)
+  is documented in `resources/README.md`.
 
 ## Unified segment schema
 
@@ -113,3 +134,18 @@ segment_class, family, location
 The `Systematic ID` fallback is present in the current v1 `merge_PAE_domains.py`
 but missing from the 2023 output file. v2 follows the current script: unmapped
 proteins keep their UniProt accession instead of an empty systematic id.
+
+## Stage split verification (2026-11-05)
+
+`01_registry.smk` was split into `01_afdb.smk`–`05_curated.smk`, and the
+comparison script stopped parsing CIF/PAE directories. The front end was rerun
+from `results/01_afdb/03_afdb_entries.tsv`: all seven comparison TSVs, the
+entry-role table, the registry, and the summary are byte-identical to the
+pre-split outputs; the Excel workbook has the same 15 sheets with identical
+values. The Markdown report differs only in the corrected registry path
+reference (`04_gene_structure_registry.tsv`). The PAE clustering/downstream
+chain was not rerun for this check.
+
+The two refresh rules were also run end to end. Their candidates reproduce the
+pinned snapshots exactly on every column the pipeline reads: 100/100 resolution
+rows and 101/101 triangulation rows.

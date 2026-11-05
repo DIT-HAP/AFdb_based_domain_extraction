@@ -24,9 +24,10 @@ Datasets covered: `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, `DY47073`.
 
 | Group | v2 files | Producer |
 |---|---|---|
-| AFdb/PomBase comparison | `results/01_comparison/*` | `compare-afdb-pombase` |
-| Gene structure registry | `results/02_gene_structure_registry.tsv` | `build-registry` |
-| Curated unified segments | `results/09_segments.tsv` | `registry-unify-segments` |
+| AFdb structure inventory | `results/01_afdb/*` | `afdb-*` |
+| AFdb/PomBase comparison | `results/03_comparison/*` | `compare-afdb-pombase` |
+| Gene structure registry | `results/04_gene_structure_registry.tsv` | `build-registry` |
+| Curated unified segments | `results/11_segments.tsv` | `registry-unify-segments` |
 | Unified segment table per dataset (legacy) | `results/<dataset>/segments.tsv` | `unify-segments` |
 | Combined segment table (legacy) | `results/combined/segments.tsv` | `combine-segments` |
 | Resource provenance | `resources/manifest.tsv` | `fetch-resources` |

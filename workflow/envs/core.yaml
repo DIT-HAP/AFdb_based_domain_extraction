@@ -6,6 +6,7 @@ dependencies:
   - python=3.12
   - biopython=1.85
   - click>=8.1
+  - httpx>=0.27
   - loguru>=0.7.2
   - numpy=1.26.4
   - openpyxl>=3.1

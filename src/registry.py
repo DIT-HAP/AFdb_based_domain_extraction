@@ -20,8 +20,9 @@ Selection rules, in priority order:
 Input
 -----
 - Comparison tables from the AFdb/PomBase comparison stage.
+- AFdb v6 entry inventory (accession -> modelled sequence).
 - PomBase 2026-06-01 peptide FASTA and gene table.
-- AFdb v6 CIF files, vDulab structures/PAE, AF3 structures/PAE.
+- AFdb v4 CIF files, vDulab structures/PAE, AF3 structures/PAE.
 - UniProt triangulation snapshot for the ``relationship`` column.
 
 Output
@@ -45,12 +46,12 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 
+from src.afdb import read_cif_header_sequence
 from src.files import AppConfig, read_tsv, require_columns, write_tsv
 
 # =============================================================================
 # 2. CONSTANTS & COLUMN CONTRACTS
 # =============================================================================
-CIF_SEQUENCE_KEY = "_entity_poly.pdbx_seq_one_letter_code_can"
 CIF_NAME_PATTERN = re.compile(r"^AF-(?P<accession>.+)-F\d+-model_v[^.]+\.cif(?:\.gz)?$")
 AFDB_PRIMARY = "AFDB_v6_primary"
 AFDB_SEQUENCE_MATCH = "AFDB_v6_sequence_match"
@@ -99,6 +100,7 @@ MERGED_REQUIRED = [
     "notes",
 ]
 ENTRY_REQUIRED = ["afdb_accession", "protein_entity_accession"]
+INVENTORY_REQUIRED = ["afdb_accession", "afdb_sequence"]
 TRIANGULATION_REQUIRED = ["gene_systematic_id", "relationship"]
 
 REGISTRY_COLUMNS = [
@@ -148,10 +150,10 @@ class RegistryPaths:
     """Immutable paths and release labels for a registry build."""
 
     merged_table: Path
-    afdb_entries: Path
+    afdb_entry_roles: Path
+    afdb_inventory: Path
     uniprot_triangulation: Path
     pombase_peptide: Path
-    afdb_dir: Path
     afdb_v4_dir: Path
     vdulab_structure_dir: Path
     vdulab_fasta_dir: Path
@@ -170,23 +172,8 @@ def open_text(path: Path) -> TextIO:
 
 def _header_sequence(path: Path) -> str:
     """Read the modelled sequence from an AFdb CIF header when present."""
-    chunks: list[str] = []
-    in_sequence = False
     with open_text(path) as handle:
-        for line in handle:
-            if in_sequence:
-                if line.strip() == ";":
-                    break
-                chunks.append(line.strip().lstrip(";"))
-            elif line.startswith(CIF_SEQUENCE_KEY):
-                remainder = line[len(CIF_SEQUENCE_KEY) :].strip()
-                if remainder and not remainder.startswith(";"):
-                    chunks.append(remainder)
-                    break
-                if remainder:
-                    chunks.append(remainder[1:])
-                in_sequence = True
-    return "".join(chunks)
+        return read_cif_header_sequence(handle)[1]
 
 
 def _atom_sequence(path: Path) -> str:
@@ -465,14 +452,16 @@ def _validate_selection(registry: pd.DataFrame, app_config: AppConfig) -> None:
 def build_registry(config: RegistryPaths, app_config: AppConfig) -> None:
     """Build and write the gene structure registry and its summary."""
     merged = read_tsv(config.merged_table)
-    entries = read_tsv(config.afdb_entries)
+    entries = read_tsv(config.afdb_entry_roles)
+    inventory = read_tsv(config.afdb_inventory)
     triangulation = read_tsv(config.uniprot_triangulation)
     require_columns(merged, MERGED_REQUIRED, config.merged_table)
-    require_columns(entries, ENTRY_REQUIRED, config.afdb_entries)
+    require_columns(entries, ENTRY_REQUIRED, config.afdb_entry_roles)
+    require_columns(inventory, INVENTORY_REQUIRED, config.afdb_inventory)
     require_columns(triangulation, TRIANGULATION_REQUIRED, config.uniprot_triangulation)
 
     peptides = load_peptides(config.pombase_peptide)
-    entry_sequences = load_cif_sequences(config.afdb_dir)
+    entry_sequences = inventory.set_index("afdb_accession")["afdb_sequence"].to_dict()
     v4_sequences = load_cif_sequences(config.afdb_v4_dir)
     af3_sequences = load_cif_sequences(config.af3_structure_dir)
     vdulab_sequences = load_gene_fastas(config.vdulab_fasta_dir)

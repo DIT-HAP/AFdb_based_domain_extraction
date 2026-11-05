@@ -2,9 +2,12 @@
 AFdb domain extraction workflow.
 ================================
 
-Root Snakefile: configuration roots, stage includes, and the default target.
-Rules live in ``workflow/rules/<nn>_<stage>.smk``, one file per pipeline stage;
-the legacy per-dataset input declarations sit at the top of ``02_pae.smk``.
+Root Snakefile: configuration roots, shared result path constants, stage
+includes, and the default target.
+
+Rules live in ``workflow/rules/<nn>_<stage>.smk``, one file per pipeline stage:
+AFdb extraction, UniProt refresh, comparison, registry, curated chain, then the
+legacy per-dataset branch.
 
 Input
 -----
@@ -12,7 +15,8 @@ Input
 
 Output
 ------
-- ``results/<dataset>/segments.tsv`` and ``results/combined/segments.tsv``.
+- ``results/01_afdb/03_afdb_entries.tsv``, ``results/04_gene_structure_registry.tsv``,
+  and ``results/11_segments.tsv``.
 
 Usage
 -----
@@ -29,6 +33,7 @@ RESULTS = PROJECT_ROOT / "results"
 DATA = PROJECT_ROOT / "data"
 RESOURCES = PROJECT_ROOT / "resources"
 CLI = PROJECT_ROOT / "scripts" / "afdb_domains.py"
+COMPARE_SCRIPT = PROJECT_ROOT / "scripts" / "compare_afdb_pombase.py"
 CORE_ENV = str(WORKFLOW_DIR / "envs" / "core.yaml")
 
 configfile: str(CONFIG_PATH)
@@ -54,12 +59,33 @@ def resolve(spec):
     return str((PROJECT_ROOT / spec).resolve())
 
 
+# Pinned external resources.
+POMBASE_2026 = str(PROJECT_ROOT / "resources" / "pombase" / "2026-06-01")
+POMBASE_GENE_TABLE = resolve(config["resources"]["pombase"]["gene_table"])
+POMBASE_PEPTIDE = f"{POMBASE_2026}/peptide.fa.gz"
+POMBASE_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["peptide_stats"])
+POMBASE_GFF3 = resolve(config["resources"]["pombase"]["gff3"])
 FEATURES_GENE_TABLE = resolve(config["resources"]["pombase"]["features_gene_table"])
 FEATURES_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["features_peptide_stats"])
-POMBASE_GFF3 = resolve(config["resources"]["pombase"]["gff3"])
-POMBASE_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["peptide_stats"])
 TED_DUMP = resolve(config["resources"]["ted"]["filtered_dump"])
 ECOD_DUMP = resolve(config["resources"]["ecod"]["dump"])
+UNIPROT_TRIANGULATION = resolve(config["resources"]["uniprot"]["triangulation"])
+UNIPROT_RESOLUTION = resolve(config["resources"]["uniprot"]["resolution"])
+
+# Numbered result paths, in pipeline order.
+AFDB_RESULTS = f"{RESULTS}/01_afdb"
+UNIPROT_RESULTS = f"{RESULTS}/02_uniprot"
+COMPARISON = f"{RESULTS}/03_comparison"
+REGISTRY_TABLE = f"{RESULTS}/04_gene_structure_registry.tsv"
+REGISTRY_SUMMARY = f"{RESULTS}/05_registry_summary.tsv"
+PAE_DOMAINS = f"{RESULTS}/06_domains"
+PAE_TABLE = f"{RESULTS}/07_PAE_domain.tsv"
+PLDDT_TABLE = f"{RESULTS}/08_pLDDT_scores.tsv"
+REFORMATED_TABLE = f"{RESULTS}/09_reformated_PAE_domain.tsv"
+ANNOTATED_TABLE = f"{RESULTS}/10_annotated_PAE_domain.tsv"
+SEGMENTS_TABLE = f"{RESULTS}/11_segments.tsv"
+
+CURATED_VERSION = "registry_2026-06-01"
 
 
 def subset_flag(entry):
@@ -71,21 +97,25 @@ def subset_flag(entry):
 wildcard_constraints:
     dataset="(?!combined$)[A-Za-z0-9_.-]+",
 
-
-include: "rules/01_registry.smk"
-include: "rules/02_pae.smk"
-include: "rules/03_plddt.smk"
-include: "rules/04_domains.smk"
-include: "rules/05_external.smk"
-include: "rules/06_unify.smk"
-include: "rules/07_dna.smk"
+include: "rules/01_afdb.smk"
+include: "rules/02_uniprot.smk"
+include: "rules/03_compare.smk"
+include: "rules/04_registry.smk"
+include: "rules/05_curated.smk"
+include: "rules/06_pae.smk"
+include: "rules/07_plddt.smk"
+include: "rules/08_domains.smk"
+include: "rules/09_external.smk"
+include: "rules/10_unify.smk"
+include: "rules/11_dna.smk"
 
 
 rule all:
     default_target: True
     input:
-        f"{RESULTS}/02_gene_structure_registry.tsv",
-        f"{RESULTS}/09_segments.tsv",
+        f"{AFDB_RESULTS}/03_afdb_entries.tsv",
+        REGISTRY_TABLE,
+        SEGMENTS_TABLE,
         expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
     output:
         touch(f"{RESULTS}/.all_done"),

@@ -1,7 +1,7 @@
 # Legacy per-dataset input declarations and PAE clustering:
 # PAE JSON matrices -> .domain files -> PAE domain table.
 #
-# Every declaration below feeds the per-dataset chain (rules 02-07) and is
+# Every declaration below feeds the per-dataset chain (rules 06-11) and is
 # disabled by default; the canonical run is driven by the registry instead.
 # Each entry pins the input directories, the gene table, and the version label
 # recorded in the unified segment table.

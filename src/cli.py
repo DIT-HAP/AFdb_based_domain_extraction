@@ -26,6 +26,13 @@ from loguru import logger
 import pandas as pd
 import typer
 
+from src.afdb import (
+    CIF_ENTRY_COLUMNS,
+    PAE_INDEX_COLUMNS,
+    join_entry_table,
+    read_cif_entries,
+    read_pae_index,
+)
 from src.dna import (
     build_genome_bed,
     build_nucleotide_bed,
@@ -33,7 +40,15 @@ from src.dna import (
     organize_domains,
 )
 from src.external import build_ecod_table, build_ted_table
-from src.files import AppConfig, load_config, setup_logger, write_tsv
+from src.files import (
+    AppConfig,
+    load_config,
+    load_gene_table,
+    read_tsv,
+    require_columns,
+    setup_logger,
+    write_tsv,
+)
 from src.pae import build_domain_table, run_pae_to_domains, run_pae_to_domains_from_registry
 from src.plddt import build_plddt_table, build_plddt_table_from_registry
 from src.registry import RegistryPaths, build_registry
@@ -47,6 +62,14 @@ from src.unify import (
     combine_segments,
     unify_segments as build_unified_segments,
     unify_segments_from_registry,
+)
+from src.uniprot import (
+    RESOLUTION_INPUT_COLUMNS,
+    TRIANGULATION_INPUT_COLUMNS,
+    UniprotCol,
+    build_resolution,
+    build_triangulation,
+    fetch_entries,
 )
 
 # =============================================================================
@@ -107,13 +130,88 @@ def fetch_resources(
     logger.info(f"Resource manifest written to {output}")
 
 
+@app.command("afdb-cif-entries")
+def afdb_cif_entries(
+    afdb_dir: Path = typer.Option(..., help="AFdb v6 CIF directory."),
+    output: Path = typer.Option(..., help="Output CIF entry table."),
+) -> None:
+    """Read every AFdb CIF header into the entry inventory."""
+    entries = read_cif_entries(afdb_dir)
+    write_tsv(entries, output)
+    logger.info(f"AFdb CIF entries written to {output} ({len(entries):,} rows)")
+
+
+@app.command("afdb-pae-index")
+def afdb_pae_index(
+    pae_dir: Path = typer.Option(..., help="AFdb PAE JSON directory."),
+    output: Path = typer.Option(..., help="Output PAE index table."),
+) -> None:
+    """Index the AFdb PAE matrices by accession."""
+    index = read_pae_index(pae_dir)
+    write_tsv(index, output)
+    logger.info(f"AFdb PAE index written to {output} ({len(index):,} rows)")
+
+
+@app.command("afdb-entry-table")
+def afdb_entry_table(
+    cif_entries: Path = typer.Option(..., help="AFdb CIF entry table."),
+    pae_index: Path = typer.Option(..., help="AFdb PAE index table."),
+    output: Path = typer.Option(..., help="Output AFdb entry table."),
+) -> None:
+    """Join PAE availability onto the AFdb CIF inventory."""
+    entries = read_tsv(cif_entries, dtype=str)
+    index = read_tsv(pae_index, dtype=str)
+    require_columns(entries, CIF_ENTRY_COLUMNS, cif_entries)
+    require_columns(index, PAE_INDEX_COLUMNS, pae_index)
+
+    table = join_entry_table(entries, index)
+    write_tsv(table, output)
+    logger.info(f"AFdb entry table written to {output} ({len(table):,} rows)")
+
+
+@app.command("refresh-uniprot-triangulation")
+def refresh_uniprot_triangulation(
+    nonidentical_pairs: Path = typer.Option(..., help="Non-identical pair table."),
+    output: Path = typer.Option(..., help="Refresh candidate output."),
+) -> None:
+    """Rebuild the UniProt triangulation snapshot from the current pairs."""
+    pairs = read_tsv(nonidentical_pairs, dtype=str)
+    require_columns(pairs, TRIANGULATION_INPUT_COLUMNS, nonidentical_pairs)
+
+    accessions = pairs[UniprotCol.UNIPROT_ID].tolist()
+    entries = fetch_entries(accessions)
+
+    table = build_triangulation(pairs, entries)
+    write_tsv(table, output)
+    logger.info(f"UniProt triangulation refresh written to {output} ({len(table):,} rows)")
+
+
+@app.command("refresh-uniprot-resolution")
+def refresh_uniprot_resolution(
+    afdb_only: Path = typer.Option(..., help="AFdb-only entry table."),
+    gene_table: Path = typer.Option(..., help="PomBase gene table."),
+    output: Path = typer.Option(..., help="Refresh candidate output."),
+) -> None:
+    """Rebuild the UniProt accession-resolution snapshot for AFdb-only entries."""
+    queries = read_tsv(afdb_only, dtype=str)
+    require_columns(queries, RESOLUTION_INPUT_COLUMNS, afdb_only)
+    pombase_accessions = set(load_gene_table(gene_table)[UniprotCol.UNIPROT_ID].dropna())
+
+    accessions = queries[UniprotCol.UNIPROT_ID].tolist()
+    entries = fetch_entries(accessions)
+
+    table = build_resolution(queries, entries, pombase_accessions)
+    write_tsv(table, output)
+    logger.info(f"UniProt resolution refresh written to {output} ({len(table):,} rows)")
+
+
 @app.command("build-registry")
 def build_registry_command(
     merged_table: Path = typer.Option(..., help="Comparison merged table."),
-    afdb_entries: Path = typer.Option(..., help="AFdb entry table with entry roles."),
+    afdb_entry_roles: Path = typer.Option(..., help="AFdb entry table with entry roles."),
+    afdb_inventory: Path = typer.Option(..., help="AFdb entry inventory with sequences."),
     uniprot_triangulation: Path = typer.Option(..., help="UniProt triangulation snapshot."),
     pombase_peptide: Path = typer.Option(..., help="PomBase peptide FASTA."),
-    afdb_dir: Path = typer.Option(..., help="AFdb v6 CIF directory."),
     afdb_v4_dir: Path = typer.Option(..., help="AFdb v4 CIF directory for TED/ECOD coordinates."),
     vdulab_structure_dir: Path = typer.Option(..., help="vDulab structure directory."),
     vdulab_fasta_dir: Path = typer.Option(..., help="vDulab input FASTA directory."),
@@ -125,10 +223,10 @@ def build_registry_command(
     """Build the per-gene structure registry."""
     paths = RegistryPaths(
         merged_table=merged_table,
-        afdb_entries=afdb_entries,
+        afdb_entry_roles=afdb_entry_roles,
+        afdb_inventory=afdb_inventory,
         uniprot_triangulation=uniprot_triangulation,
         pombase_peptide=pombase_peptide,
-        afdb_dir=afdb_dir,
         afdb_v4_dir=afdb_v4_dir,
         vdulab_structure_dir=vdulab_structure_dir,
         vdulab_fasta_dir=vdulab_fasta_dir,
