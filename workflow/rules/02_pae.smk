@@ -1,4 +1,57 @@
-# PAE clustering: JSON matrices -> .domain files -> PAE domain table.
+# Legacy per-dataset input declarations and PAE clustering:
+# PAE JSON matrices -> .domain files -> PAE domain table.
+#
+# Every declaration below feeds the per-dataset chain (rules 02-07) and is
+# disabled by default; the canonical run is driven by the registry instead.
+# Each entry pins the input directories, the gene table, and the version label
+# recorded in the unified segment table.
+
+DATASETS = {
+    # AlphaFold DB release 2023-07-08, UP000002485_284812_SCHPO_v4.
+    "AFDB_v4": {
+        "enabled": False,
+        "source_version": "AFDB_v4_20230708",
+        "pae_dir": resolve("cache:AlphaFold_Dataset/20230708_downloaded/PAE_files"),
+        "structure_dir": resolve("cache:AlphaFold_Dataset/20230708_downloaded/UP000002485_284812_SCHPO_v4"),
+        "gene_table": resolve("project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"),
+    },
+    # Custom Dulab predictions, 2024-03-05 release (the one behind the legacy vDulab tables).
+    "vDulab": {
+        "enabled": False,
+        "source_version": "vDulab_20240305",
+        "pae_dir": resolve("raw:20240305_predicted_results/PAE_files"),
+        "structure_dir": resolve("raw:20240305_predicted_results/vDulab"),
+        "gene_table": resolve("project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"),
+    },
+    # Custom Dulab2 predictions, 2024-09-04.
+    "vDulab2": {
+        "enabled": False,
+        "source_version": "vDulab2_20240904",
+        "pae_dir": resolve("raw:20240904_formated_results_vDulab2_noNaN/PAE_files"),
+        "structure_dir": resolve("raw:20240904_formated_results_vDulab2_noNaN/vDulab2"),
+        "gene_table": resolve("project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"),
+    },
+    # AlphaFold 3 predictions, 2024-11-01.
+    "AF3": {
+        "enabled": False,
+        "source_version": "AF3_20241101",
+        "pae_dir": resolve("raw:20241101_AF3_output/PAE_files"),
+        "structure_dir": resolve("raw:20241101_AF3_output/PDB"),
+        "gene_table": resolve("raw:20241101_AF3_output/AF3_gene_IDs_names_products.tsv"),
+    },
+    # Dulab2 predictions restricted to proteins present in the DY47073 annotation.
+    "DY47073": {
+        "enabled": False,
+        "source_version": "vDulab2_20240904",
+        "pae_dir": resolve("raw:20240904_formated_results_vDulab2_noNaN/PAE_files"),
+        "structure_dir": resolve("raw:20240904_formated_results_vDulab2_noNaN/vDulab2"),
+        "gene_table": resolve("project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"),
+        "protein_subset": resolve("project:resources/dy47073/protein_subset.txt"),
+    },
+}
+
+ENABLED_DATASETS = sorted(name for name, entry in DATASETS.items() if entry["enabled"])
+
 
 rule pae_to_domains:
     input:

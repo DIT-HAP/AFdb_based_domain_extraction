@@ -10,8 +10,8 @@ Four numbering schemes are used:
 - `Rn` — Snakemake rule (Appendix A); the rule files are numbered
   `workflow/rules/01_registry.smk`–`07_dna.smk`.
 - `Sn` — script or Python module (Appendix B).
-- `Dn` — dataset declaration (Appendix C); the files are numbered
-  `workflow/datasets/01_AFDB_v4.smk`–`06_AFDB_20251107.smk`.
+- `Dn` — dataset declaration (Appendix C), defined in the `DATASETS` block at
+  the top of `workflow/rules/02_pae.smk`.
 
 Canonical deliverables: **#2** (`02_gene_structure_registry.tsv`) and **#9**
 (`09_segments.tsv`). Everything else is an intermediate or a diagnostic.
@@ -160,14 +160,16 @@ maintained but outside the acceptance criteria.
 
 ## Appendix C — Dataset declaration index
 
-All six declarations are currently `enabled: False`; the canonical run does
-not read them.
+Declarations live in the `DATASETS` block at the top of
+`workflow/rules/02_pae.smk`. All five are currently `enabled: False`; the
+canonical run does not read them. The planned `AFDB_20251107` (AFdb v6) entry
+was dropped: nothing referenced it, and the registry reads v6 through
+`config/config.yaml`.
 
-| # | File | Dataset |
+| # | Dataset | Source version |
 |---|---|---|
-| D1 | `workflow/datasets/01_AFDB_v4.smk` | AFDB_v4 |
-| D2 | `workflow/datasets/02_vDulab.smk` | vDulab |
-| D3 | `workflow/datasets/03_vDulab2.smk` | vDulab2 |
-| D4 | `workflow/datasets/04_AF3.smk` | AF3 |
-| D5 | `workflow/datasets/05_DY47073.smk` | DY47073 |
-| D6 | `workflow/datasets/06_AFDB_20251107.smk` | AFDB_20251107 |
+| D1 | `AFDB_v4` | `AFDB_v4_20230708` |
+| D2 | `vDulab` | `vDulab_20240305` |
+| D3 | `vDulab2` | `vDulab2_20240904` |
+| D4 | `AF3` | `AF3_20241101` |
+| D5 | `DY47073` | `vDulab2_20240904` |

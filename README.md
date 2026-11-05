@@ -31,8 +31,8 @@ Segment coordinates are **1-based inclusive**; `length = end - start + 1`.
 ```
 config/config.yaml            Path roots, pinned resource versions, parameters
 workflow/Snakefile            Config root, stage includes, default target
-workflow/rules/<nn>_<stage>.smk    Rules grouped by pipeline stage
-workflow/datasets/<nn>_<ds>.smk    Dataset declarations (input paths, version)
+workflow/rules/<nn>_<stage>.smk    Rules grouped by pipeline stage; 02_pae.smk
+                                   also declares the legacy datasets
 workflow/envs/                Driver environment and the shared rule environment
 src/                          Functional core + typer CLI
 scripts/afdb_domains.py       Thin executable shell

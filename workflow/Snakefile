@@ -2,14 +2,13 @@
 AFdb domain extraction workflow.
 ================================
 
-Root Snakefile: configuration roots, dataset declarations, stage includes, and
-the default target. Rules live in ``workflow/rules/<nn>_<stage>.smk``, one file
-per pipeline stage; dataset input paths live in
-``workflow/datasets/<nn>_<dataset>.smk``.
+Root Snakefile: configuration roots, stage includes, and the default target.
+Rules live in ``workflow/rules/<nn>_<stage>.smk``, one file per pipeline stage;
+the legacy per-dataset input declarations sit at the top of ``02_pae.smk``.
 
 Input
 -----
-- ``config/config.yaml`` and the dataset declarations.
+- ``config/config.yaml`` and the pinned resources it points at.
 
 Output
 ------
@@ -62,26 +61,6 @@ POMBASE_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["peptide_stats"])
 TED_DUMP = resolve(config["resources"]["ted"]["filtered_dump"])
 ECOD_DUMP = resolve(config["resources"]["ecod"]["dump"])
 
-DATASETS = {}
-include: "datasets/01_AFDB_v4.smk"
-include: "datasets/02_vDulab.smk"
-include: "datasets/03_vDulab2.smk"
-include: "datasets/04_AF3.smk"
-include: "datasets/05_DY47073.smk"
-include: "datasets/06_AFDB_20251107.smk"
-
-ENABLED_DATASETS = sorted(name for name, entry in DATASETS.items() if entry["enabled"])
-
-
-rule all:
-    default_target: True
-    input:
-        f"{RESULTS}/02_gene_structure_registry.tsv",
-        f"{RESULTS}/09_segments.tsv",
-        expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
-    output:
-        touch(f"{RESULTS}/.all_done"),
-
 
 def subset_flag(entry):
     """Render the optional --protein-subset flag for a dataset."""
@@ -100,3 +79,13 @@ include: "rules/04_domains.smk"
 include: "rules/05_external.smk"
 include: "rules/06_unify.smk"
 include: "rules/07_dna.smk"
+
+
+rule all:
+    default_target: True
+    input:
+        f"{RESULTS}/02_gene_structure_registry.tsv",
+        f"{RESULTS}/09_segments.tsv",
+        expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
+    output:
+        touch(f"{RESULTS}/.all_done"),
