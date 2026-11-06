@@ -32,6 +32,7 @@ from pathlib import Path
 import re
 from typing import TextIO
 
+from Bio.PDB.MMCIF2Dict import MMCIF2Dict
 from loguru import logger
 import pandas as pd
 
@@ -74,27 +75,15 @@ ENTRY_TABLE_COLUMNS = [*CIF_ENTRY_COLUMNS, AfdbCol.PAE_AVAILABLE, AfdbCol.PAE_FI
 
 def read_cif_header_sequence(handle: TextIO) -> tuple[str, str]:
     """Read the entity description and modelled sequence from an AFdb CIF header."""
-    description = ""
-    sequence_chunks: list[str] = []
-    in_sequence = False
+    cif = MMCIF2Dict(handle)
+    description = _first_cif_value(cif.get(CIF_DESCRIPTION_KEY, ""))
+    sequence = _first_cif_value(cif.get(CIF_SEQUENCE_KEY, ""))
+    return description, "".join(sequence.split())
 
-    for line in handle:
-        if in_sequence:
-            if line.strip() == ";":
-                break
-            sequence_chunks.append(line.strip().lstrip(";"))
-        elif line.startswith(CIF_SEQUENCE_KEY):
-            remainder = line[len(CIF_SEQUENCE_KEY) :].strip()
-            if remainder and not remainder.startswith(";"):
-                sequence_chunks.append(remainder)
-                break
-            if remainder:
-                sequence_chunks.append(remainder[1:])
-            in_sequence = True
-        elif line.startswith(CIF_DESCRIPTION_KEY):
-            description = line.split(None, 1)[1].strip().strip('"')
 
-    return description, "".join(sequence_chunks)
+def _first_cif_value(value: str | list[str]) -> str:
+    """Return the first value of a CIF tag that may repeat across entities."""
+    return value[0] if isinstance(value, list) else value
 
 
 def parse_afdb_cif(path: Path) -> dict[str, str]:
