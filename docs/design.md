@@ -21,22 +21,30 @@ canonical output comes from the gene structure registry.
 ## Gene structure registry
 
 The registry selects exactly one structure and one PAE matrix per PomBase
-protein-coding gene:
+protein-coding gene. The comparison stage pairs genes and AFdb entries by
+protein sequence first and falls back to the UniProt accession only when no
+exact sequence match exists:
 
 | Rule | Genes |
 |---|---:|
-| Identical PomBase/AFdb sequence | 5,008 (AFdb v6 primary, including 9 sequence-matched entries) |
-| AFdb v6 entry whose sequence equals PomBase | 62 (alternate accession) |
-| vDulab prediction whose input equals PomBase | 46 (38 non-identical + 8 long proteins) |
+| Sequence-identical AFdb v6 entry | 5,071 (4,999 own accession + 63 alternate + 9 without an AFdb entry at their accession) |
+| vDulab prediction whose input equals PomBase | 45 (37 non-identical + 8 long proteins) |
 | AF3 prediction (long proteins without vDulab) | 3 (dhc1, tra2, mdn1) |
-| Excluded | 7 (SPCC569.03, sib1, B5BP45-49) |
-| AFdb-only (annotated, not analysed) | 16 |
+| Excluded | 7 genes (SPCC569.03, sib1, B5BP45-49) + 16 AFdb-only rows |
+| Unselected AFdb entries | 92 (63 superseded by a sequence match, 13 duplicates, 16 no PomBase match) |
 
 `in_analysis` is true for 5,119 genes. The registry also records
 `structure_sequence`, `modeled_length`, `coordinate_basis`, and
 `ted_ecod_coordinate_ok`. The TED/ECOD flag is exact sequence equality between
 the AFdb v4 model and the selected structure; genes with a v4/v6 difference
 are excluded from TED/ECOD rather than risking coordinate drift.
+
+Sequence-first pairing changes the source of 63 genes whose AFdb v6 primary
+entry no longer matches the PomBase peptide: the registry uses the alternate
+entry whose sequence is exact. One of these is hht3 (SPBC1105.11c), whose
+PomBase 2026 peptide equals the H3.1/H3.2 sequence (P09988) rather than the
+current UniProt H3.3 entry (P10651); the registry therefore selects P09988 and
+marks the coordinate basis as PomBase.
 
 Python dependencies are pinned in `workflow/envs/core.yaml`. The critical pin
 is `python-igraph=0.11.4`: version 1.0 produces a different Leiden partition
@@ -149,3 +157,20 @@ chain was not rerun for this check.
 The two refresh rules were also run end to end. Their candidates reproduce the
 pinned snapshots exactly on every column the pipeline reads: 100/100 resolution
 rows and 101/101 triangulation rows.
+
+## Sequence-first matching (2026-11-05)
+
+The comparison now pairs genes to AFdb entries by exact protein sequence before
+falling back to the UniProt accession. The comparison and registry were rerun:
+
+- 5,109 paired genes: 5,071 sequence matches + 38 UniProt ID fallbacks.
+- 72 sequence matches use an entry other than the gene's UniProt accession
+  (63 superseded old entries + 9 genes without an AFdb entry at their accession).
+- 92 unselected AFdb entries: 63 superseded, 13 duplicates, 16 no PomBase match.
+- 17 PomBase-only genes; merged table still 5,142 rows.
+- Registry `in_analysis` remains 5,119 (5,071 AFdb + 45 vDulab + 3 AF3); hht3
+  moves from vDulab to the sequence-identical AFdb entry P09988.
+- The Excel workbook gains an `afdb_only_superseded` sheet.
+
+The earlier byte-identical stage-split check was performed before this matching
+change and no longer applies verbatim.

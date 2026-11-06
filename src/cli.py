@@ -195,6 +195,8 @@ def refresh_uniprot_resolution(
     """Rebuild the UniProt accession-resolution snapshot for AFdb-only entries."""
     queries = read_tsv(afdb_only, dtype=str)
     require_columns(queries, RESOLUTION_INPUT_COLUMNS, afdb_only)
+    is_superseded = queries["match_status"] == "superseded_by_sequence_match"
+    queries = queries.loc[~is_superseded].reset_index(drop=True)
     pombase_accessions = set(load_gene_table(gene_table)[UniprotCol.UNIPROT_ID].dropna())
 
     accessions = queries[UniprotCol.UNIPROT_ID].tolist()
@@ -208,7 +210,6 @@ def refresh_uniprot_resolution(
 @app.command("build-registry")
 def build_registry_command(
     merged_table: Path = typer.Option(..., help="Comparison merged table."),
-    afdb_entry_roles: Path = typer.Option(..., help="AFdb entry table with entry roles."),
     afdb_inventory: Path = typer.Option(..., help="AFdb entry inventory with sequences."),
     uniprot_triangulation: Path = typer.Option(..., help="UniProt triangulation snapshot."),
     pombase_peptide: Path = typer.Option(..., help="PomBase peptide FASTA."),
@@ -223,7 +224,6 @@ def build_registry_command(
     """Build the per-gene structure registry."""
     paths = RegistryPaths(
         merged_table=merged_table,
-        afdb_entry_roles=afdb_entry_roles,
         afdb_inventory=afdb_inventory,
         uniprot_triangulation=uniprot_triangulation,
         pombase_peptide=pombase_peptide,

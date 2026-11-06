@@ -92,7 +92,7 @@ TRIANGULATION_INPUT_COLUMNS = [
     UniprotCol.AFDB_SEQUENCE,
     UniprotCol.POMBASE_SEQUENCE,
 ]
-RESOLUTION_INPUT_COLUMNS = [UniprotCol.UNIPROT_ID]
+RESOLUTION_INPUT_COLUMNS = [UniprotCol.UNIPROT_ID, "match_status"]
 
 # =============================================================================
 # 3. CONFIGURATION

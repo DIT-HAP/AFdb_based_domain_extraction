@@ -6,28 +6,31 @@ Compare the proteins modelled in AlphaFold DB release v6 for
 Schizosaccharomyces pombe (proteome UP000002485) with the current PomBase
 protein-coding gene annotation.
 
-The comparison has three levels:
+Pairing is sequence-first:
 
-1. Set membership by UniProt accession: shared, AFdb-only, PomBase-only.
-2. Protein length agreement for shared proteins.
-3. Sequence agreement, classified as identical, substitution-only,
+1. For every PomBase gene, find AFdb v6 entries whose modelled sequence exactly
+   equals the PomBase peptide. Choose one entry, preferring the gene's own
+   UniProt accession and otherwise the smallest alternate accession.
+2. Genes without an exact sequence match fall back to their UniProt accession;
+   these pairs are compared field by field and classified as substitution-only,
    indel-only, or both (alignment-derived).
+3. AFdb entries selected by no gene are classified as superseded (the gene chose
+   a sequence-identical alternate entry), duplicate (the sequence matches a gene
+   that preferred its own entry), or no_pombase_match.
 
 AFdb sequences are read from the entry inventory table produced by the
 ``afdb-entry-table`` stage (modelled CIF entity sequence
 ``_entity_poly.pdbx_seq_one_letter_code_can``); PomBase sequences are read
-from ``peptide.fa`` and truncated at the first stop codon. AFdb-only entries
-are additionally matched to PomBase peptides by exact sequence, which
-separates obsolete/secondary UniProt accessions from genuinely AFdb-specific
-proteins. The inventory also records PAE availability per entry.
+from ``peptide.fa`` and truncated at the first stop codon. The inventory also
+records PAE availability per entry.
 
 When a DY47073 protein FASTA is supplied, the report adds a third annotation
 layer. DY47073 records are resolved to PomBase gene IDs, collapsed per gene,
-and classified against both PomBase and the primary AFdb sequence: all three
+and classified against both PomBase and the selected AFdb sequence: all three
 identical, DY47073 agrees with PomBase only, DY47073 agrees with AFdb only,
 DY47073 differs from both, or DY47073 has no record. DY47073-only proteins
-(mostly PomBase 2026 pseudogenes) and AFdb-only entries that match a DY47073
-protein are reported separately.
+(mostly PomBase 2026 pseudogenes) and unselected AFdb entries that match a
+DY47073 protein are reported separately.
 
 Input
 -----
@@ -40,12 +43,12 @@ Input
 
 Output
 ------
-- ``01_merged_table.tsv``: unified shared/AFdb-only/PomBase-only table.
-- ``02_afdb_entry_roles.tsv``: AFdb v6 entry roles against the protein entities.
-- ``03_shared_comparison.tsv``: one row per ID-matched shared gene pair.
-- ``04_shared_by_sequence.tsv``: shared pairs matched by exact sequence.
-- ``05_nonidentical_pairs.tsv``: shared pairs with non-identical sequences.
-- ``06_afdb_only.tsv``: AFdb-only accessions with exact-match evidence.
+- ``01_merged_table.tsv``: unified paired/AFdb-only/PomBase-only table.
+- ``02_afdb_entry_roles.tsv``: AFdb v6 entry roles against selected genes.
+- ``03_shared_comparison.tsv``: one row per paired gene.
+- ``04_shared_by_sequence.tsv``: sequence matches whose entry is not the gene's accession.
+- ``05_nonidentical_pairs.tsv``: ID-fallback pairs with non-identical sequences.
+- ``06_afdb_only.tsv``: AFdb entries selected by no gene.
 - ``07_pombase_only.tsv``: PomBase-only genes with lengths and reasons.
 - ``08_summary_counts.tsv``: headline counts.
 - ``09_report.md``: human-readable difference report.
@@ -126,11 +129,17 @@ SEQUENCE_CATEGORIES = (
     "both",
 )
 AFDB_ONLY_STATUSES = (
-    "sequence_identical_to_shared_protein",
-    "represents_pombase_only_gene",
-    "sequence_identical_to_other_afdb_entry",
+    "superseded_by_sequence_match",
+    "duplicate_of_selected_entry",
     "no_pombase_match",
 )
+ROLE_PRIORITY = {
+    "primary": 0,
+    "sequence_matched": 1,
+    "superseded_by_sequence_match": 2,
+    "duplicate_of_selected_entry": 3,
+    "no_pombase_match": 4,
+}
 POMBASE_ONLY_COLUMNS = [
     "gene_systematic_id",
     "gene_name",
@@ -542,6 +551,70 @@ def load_dy47073_proteins(path: Path, gene_catalog: pd.DataFrame) -> pd.DataFram
 # =============================================================================
 # 5. FUNCTIONAL CORE (Pure, Trusted Transformations)
 # =============================================================================
+def assign_structure_accessions(
+    pombase_genes: pd.DataFrame,
+    pombase_peptides: pd.DataFrame,
+    afdb_entries: pd.DataFrame,
+) -> pd.DataFrame:
+    """Pair each gene to one AFdb entry by exact sequence, then by UniProt ID."""
+    genes = pombase_genes.merge(
+        pombase_peptides.loc[
+            :,
+            [
+                PeptideCol.SYSTEMATIC_ID,
+                PeptideCol.SEQUENCE,
+                PeptideCol.LENGTH,
+                PeptideCol.INTERNAL_STOP,
+            ],
+        ],
+        on=PeptideCol.SYSTEMATIC_ID,
+        how="inner",
+    ).rename(columns={GeneCol.ACCESSION: "pombase_accession"})
+
+    entry_accessions = set(afdb_entries[AfdbCol.ACCESSION])
+    candidates = genes.merge(
+        afdb_entries.loc[:, [AfdbCol.ACCESSION, AfdbCol.SEQUENCE]],
+        left_on=PeptideCol.SEQUENCE,
+        right_on=AfdbCol.SEQUENCE,
+        how="inner",
+    )
+    is_own_entry = candidates["pombase_accession"].eq(candidates[AfdbCol.ACCESSION])
+    candidates = candidates.assign(_is_own_entry=is_own_entry).sort_values(
+        [PeptideCol.SYSTEMATIC_ID, "_is_own_entry", AfdbCol.ACCESSION],
+        ascending=[True, False, True],
+        kind="stable",
+    )
+    chosen = candidates.drop_duplicates(PeptideCol.SYSTEMATIC_ID, keep="first").rename(
+        columns={AfdbCol.ACCESSION: "afdb_accession"}
+    )
+    duplicates = (
+        candidates.loc[~candidates.index.isin(chosen.index)]
+        .groupby(PeptideCol.SYSTEMATIC_ID)[AfdbCol.ACCESSION]
+        .agg(join_unique)
+    )
+
+    pairs = genes.merge(
+        chosen.loc[:, [PeptideCol.SYSTEMATIC_ID, "afdb_accession"]],
+        on=PeptideCol.SYSTEMATIC_ID,
+        how="left",
+    )
+    pairs["duplicate_afdb_accessions"] = pairs[PeptideCol.SYSTEMATIC_ID].map(duplicates).fillna("")
+    has_sequence_match = pairs["afdb_accession"].notna()
+    has_id_entry = pairs["pombase_accession"].isin(entry_accessions)
+    pairs["match_method"] = np.select(
+        [has_sequence_match, has_id_entry],
+        ["sequence", "uniprot_id"],
+        default="none",
+    )
+    is_id_fallback = pairs["match_method"].eq("uniprot_id")
+    pairs.loc[is_id_fallback, "afdb_accession"] = pairs.loc[is_id_fallback, "pombase_accession"]
+
+    has_own_entry = pairs["pombase_accession"].isin(entry_accessions)
+    pairs["uniprot_id"] = pairs["pombase_accession"].where(has_own_entry, pairs["afdb_accession"])
+    pairs["uniprot_id"] = pairs["uniprot_id"].fillna(pairs["pombase_accession"])
+    return pairs
+
+
 def build_aligner() -> PairwiseAligner:
     """Build a global protein aligner for difference classification."""
     aligner = PairwiseAligner()
@@ -631,156 +704,67 @@ def compare_sequences(
     }
 
 
-def split_accession_sets(
-    afdb_entries: pd.DataFrame,
-    pombase_genes: pd.DataFrame,
-) -> tuple[set[str], set[str], set[str]]:
-    """Split accessions into shared, AFdb-only, and PomBase-only sets."""
-    afdb_accessions = set(afdb_entries[AfdbCol.ACCESSION])
-    pombase_accessions = set(pombase_genes[GeneCol.ACCESSION].dropna())
-    return (
-        afdb_accessions & pombase_accessions,
-        afdb_accessions - pombase_accessions,
-        pombase_accessions - afdb_accessions,
-    )
-
-
 def attach_comparison(
-    shared_genes: pd.DataFrame,
+    pairs: pd.DataFrame,
     afdb_entries: pd.DataFrame,
-    pombase_peptides: pd.DataFrame,
     aligner: PairwiseAligner,
 ) -> pd.DataFrame:
-    """Attach lengths and sequence-difference statistics to each shared gene/accession pair."""
-    merged = shared_genes.merge(afdb_entries, on=AfdbCol.ACCESSION, how="inner")
-    merged = merged.merge(pombase_peptides, on=PeptideCol.SYSTEMATIC_ID, how="inner")
-    merged[ComparisonCol.LENGTH_DELTA] = merged[AfdbCol.LENGTH] - merged[PeptideCol.LENGTH]
+    """Attach AFdb fields and sequence-difference statistics to each selected pair."""
+    entry_table = afdb_entries.rename(columns={AfdbCol.ACCESSION: "afdb_accession"})
+    merged = pairs.merge(entry_table, on="afdb_accession", how="inner")
+    merged[ComparisonCol.LENGTH_DELTA] = merged[AfdbCol.LENGTH] - merged["pombase_length"]
 
     statistics = pd.DataFrame.from_records(
         [
             compare_sequences(afdb_sequence, pombase_sequence, aligner)
             for afdb_sequence, pombase_sequence in zip(
-                merged[AfdbCol.SEQUENCE], merged[PeptideCol.SEQUENCE], strict=True
+                merged[AfdbCol.SEQUENCE], merged["pombase_sequence"], strict=True
             )
         ]
     )
     return pd.concat([merged.reset_index(drop=True), statistics], axis=1)
 
 
-def join_values(mapping: dict[str, list[str]]) -> dict[str, str]:
-    """Join sequence-keyed list values into semicolon-separated strings."""
-    return {sequence: ";".join(values) for sequence, values in mapping.items()}
-
-
-def annotate_afdb_only(
-    afdb_only: pd.DataFrame,
+def annotate_unpaired_entries(
+    afdb_entries: pd.DataFrame,
+    pombase_genes: pd.DataFrame,
     pombase_peptides: pd.DataFrame,
-    shared_entries: pd.DataFrame,
-    shared_genes: pd.DataFrame,
+    selected_accessions: set[str],
 ) -> pd.DataFrame:
-    """Match AFdb-only entries to PomBase peptides and shared AFdb sequences by exact sequence."""
+    """Classify AFdb entries that no gene selected as its structure."""
+    unpaired = afdb_entries.loc[~afdb_entries[AfdbCol.ACCESSION].isin(selected_accessions)].copy()
     peptide_to_genes = (
-        pombase_peptides.groupby(PeptideCol.SEQUENCE)[PeptideCol.SYSTEMATIC_ID].agg(list).to_dict()
+        pombase_peptides.groupby(PeptideCol.SEQUENCE)[PeptideCol.SYSTEMATIC_ID]
+        .agg(join_unique)
+        .to_dict()
     )
-    shared_sequence_to_accessions = (
-        shared_entries.groupby(AfdbCol.SEQUENCE)[AfdbCol.ACCESSION].agg(list).to_dict()
+    accession_to_genes = (
+        pombase_genes.groupby(GeneCol.ACCESSION)[GeneCol.SYSTEMATIC_ID].agg(join_unique).to_dict()
     )
-    shared_gene_ids = set(shared_genes[GeneCol.SYSTEMATIC_ID])
-    peptide_to_shared = {
-        sequence: [gene for gene in genes if gene in shared_gene_ids]
-        for sequence, genes in peptide_to_genes.items()
-    }
-    peptide_to_pombase_only = {
-        sequence: [gene for gene in genes if gene not in shared_gene_ids]
-        for sequence, genes in peptide_to_genes.items()
-    }
-
-    annotated = afdb_only.assign(
-        matched_pombase_genes=afdb_only[AfdbCol.SEQUENCE]
-        .map(join_values(peptide_to_genes))
-        .fillna(""),
-        matched_shared_genes=afdb_only[AfdbCol.SEQUENCE]
-        .map(join_values(peptide_to_shared))
-        .fillna(""),
-        matched_pombase_only_genes=afdb_only[AfdbCol.SEQUENCE]
-        .map(join_values(peptide_to_pombase_only))
-        .fillna(""),
-        duplicate_of_shared_afdb_accessions=afdb_only[AfdbCol.SEQUENCE]
-        .map(join_values(shared_sequence_to_accessions))
-        .fillna(""),
-    )
-    status_conditions = [
-        annotated["matched_shared_genes"] != "",
-        annotated["matched_pombase_only_genes"] != "",
-        annotated["duplicate_of_shared_afdb_accessions"] != "",
-    ]
-    annotated["match_status"] = np.select(
-        status_conditions,
-        [
-            "sequence_identical_to_shared_protein",
-            "represents_pombase_only_gene",
-            "sequence_identical_to_other_afdb_entry",
-        ],
+    unpaired["matched_pombase_genes"] = unpaired[AfdbCol.SEQUENCE].map(peptide_to_genes).fillna("")
+    unpaired["superseded_gene"] = unpaired[AfdbCol.ACCESSION].map(accession_to_genes).fillna("")
+    is_superseded = unpaired["superseded_gene"] != ""
+    has_sequence_match = unpaired["matched_pombase_genes"] != ""
+    unpaired["match_status"] = np.select(
+        [is_superseded, has_sequence_match],
+        ["superseded_by_sequence_match", "duplicate_of_selected_entry"],
         default="no_pombase_match",
     )
-    return annotated
+    return unpaired
 
 
-def build_pombase_only(
-    pombase_genes: pd.DataFrame,
-    pombase_peptides: pd.DataFrame,
-    afdb_only: pd.DataFrame,
-    afdb_max_length: int,
-) -> pd.DataFrame:
-    """List PomBase genes that have no direct AFdb accession match."""
-    genes_with_peptides = pombase_genes.merge(
-        pombase_peptides, on=PeptideCol.SYSTEMATIC_ID, how="inner"
+def build_pombase_only(unpaired_genes: pd.DataFrame, afdb_max_length: int) -> pd.DataFrame:
+    """List genes with no AFdb structure, with length and reason."""
+    table = unpaired_genes.copy()
+    table["uniprot_id"] = table["pombase_accession"].fillna("")
+    table["matched_afdb_only_accessions"] = ""
+    table["exceeds_afdb_max_length"] = table["pombase_length"] > afdb_max_length
+    table["reason"] = np.select(
+        [table["pombase_accession"].isna(), table["exceeds_afdb_max_length"]],
+        ["no_uniprot_accession", "exceeds_afdb_length_cutoff"],
+        default="not_modelled_by_afdb",
     )
-    joined_matches = join_values(
-        afdb_only.groupby(AfdbCol.SEQUENCE)[AfdbCol.ACCESSION].agg(list).to_dict()
-    )
-    genes_without_accession = genes_with_peptides.loc[
-        genes_with_peptides[GeneCol.ACCESSION].isna()
-    ].copy()
-    genes_without_accession["uniprot_id"] = ""
-    genes_without_accession["matched_afdb_only_accessions"] = (
-        genes_without_accession[PeptideCol.SEQUENCE].map(joined_matches).fillna("")
-    )
-    genes_without_accession["reason"] = "no_uniprot_accession"
-    genes_without_accession["exceeds_afdb_max_length"] = (
-        genes_without_accession[PeptideCol.LENGTH] > afdb_max_length
-    )
-
-    is_represented = genes_without_accession["matched_afdb_only_accessions"] != ""
-    genes_without_accession.loc[is_represented, "reason"] = (
-        "represented_in_afdb_under_other_accession"
-    )
-    return genes_without_accession.loc[:, POMBASE_ONLY_COLUMNS]
-
-
-def build_pombase_only_missing_accessions(
-    pombase_genes: pd.DataFrame,
-    pombase_peptides: pd.DataFrame,
-    pombase_only_accessions: set[str],
-    afdb_only: pd.DataFrame,
-    afdb_max_length: int,
-) -> pd.DataFrame:
-    """List PomBase-only accessions with length and exact-sequence reconciliation."""
-    joined_matches = join_values(
-        afdb_only.groupby(AfdbCol.SEQUENCE)[AfdbCol.ACCESSION].agg(list).to_dict()
-    )
-    genes = pombase_genes.loc[pombase_genes[GeneCol.ACCESSION].isin(pombase_only_accessions)]
-    genes = genes.merge(pombase_peptides, on=PeptideCol.SYSTEMATIC_ID, how="inner")
-    genes["matched_afdb_only_accessions"] = (
-        genes[PeptideCol.SEQUENCE].map(joined_matches).fillna("")
-    )
-    genes["reason"] = "not_modelled_by_afdb"
-    genes["exceeds_afdb_max_length"] = genes[PeptideCol.LENGTH] > afdb_max_length
-    genes.loc[genes["exceeds_afdb_max_length"], "reason"] = "exceeds_afdb_length_cutoff"
-
-    is_represented = genes["matched_afdb_only_accessions"] != ""
-    genes.loc[is_represented, "reason"] = "represented_in_afdb_under_other_accession"
-    return genes.loc[:, POMBASE_ONLY_COLUMNS]
+    return table.loc[:, POMBASE_ONLY_COLUMNS]
 
 
 def uniprot_triangulation_counts(shared_comparison: pd.DataFrame) -> dict[str, int]:
@@ -806,14 +790,15 @@ def uniprot_resolution_counts(afdb_only: pd.DataFrame) -> dict[str, int]:
     if "is_secondary" not in afdb_only.columns:
         return {}
 
+    resolved = afdb_only["is_secondary"].notna()
     is_secondary = afdb_only["is_secondary"] == "True"
     primary_in_pombase = afdb_only["primary_in_pombase"] == "True"
     return {
-        "uniprot_resolved": int(afdb_only["is_secondary"].notna().sum()),
-        "uniprot_secondary": int(is_secondary.sum()),
-        "uniprot_secondary_in_pombase": int((is_secondary & primary_in_pombase).sum()),
-        "uniprot_primary": int((~is_secondary).sum()),
-        "uniprot_primary_in_pombase": int(((~is_secondary) & primary_in_pombase).sum()),
+        "uniprot_resolved": int(resolved.sum()),
+        "uniprot_secondary": int((resolved & is_secondary).sum()),
+        "uniprot_secondary_in_pombase": int((resolved & is_secondary & primary_in_pombase).sum()),
+        "uniprot_primary": int((resolved & ~is_secondary).sum()),
+        "uniprot_primary_in_pombase": int((resolved & ~is_secondary & primary_in_pombase).sum()),
     }
 
 
@@ -822,26 +807,29 @@ def build_summary_counts(
     pae_accessions: set[str],
     pombase_genes: pd.DataFrame,
     pombase_peptides: pd.DataFrame,
-    shared_accessions: set[str],
-    afdb_only: pd.DataFrame,
-    pombase_only_accessions: set[str],
     shared_comparison: pd.DataFrame,
+    afdb_only: pd.DataFrame,
     pombase_only: pd.DataFrame,
 ) -> dict[str, int]:
     """Collect headline counts for the report."""
     categories = shared_comparison[ComparisonCol.CATEGORY]
+    match_method = shared_comparison["match_method"]
     afdb_accessions = set(afdb_entries[AfdbCol.ACCESSION])
+    is_sequence = match_method == "sequence"
+    is_rescued = shared_comparison["pombase_accession"].isna() | shared_comparison[
+        "afdb_accession"
+    ].ne(shared_comparison["pombase_accession"])
     counts = {
         "afdb_entries": len(afdb_entries),
         "afdb_unique_accessions": afdb_entries[AfdbCol.ACCESSION].nunique(),
         "pombase_coding_genes": len(pombase_genes),
         "pombase_genes_with_accession": int(pombase_genes[GeneCol.ACCESSION].notna().sum()),
         "pombase_unique_accessions": int(pombase_genes[GeneCol.ACCESSION].nunique()),
-        "shared_accessions": len(shared_accessions),
-        "afdb_only_accessions": len(afdb_only),
-        "pombase_only_accessions": len(pombase_only_accessions),
-        "pombase_genes_without_accession": int(pombase_genes[GeneCol.ACCESSION].isna().sum()),
         "shared_genes": len(shared_comparison),
+        "shared_by_sequence_genes": int(is_sequence.sum()),
+        "shared_by_id_genes": int((match_method == "uniprot_id").sum()),
+        "sequence_rescued_genes": int((is_sequence & is_rescued).sum()),
+        "afdb_only_accessions": len(afdb_only),
         "pombase_only_genes": len(pombase_only),
         "same_length_pairs": int(
             (
@@ -859,11 +847,11 @@ def build_summary_counts(
         "substitution_only_pairs": int((categories == "substitution_only").sum()),
         "indel_only_pairs": int((categories == "indel_only").sum()),
         "both_pairs": int((categories == "both").sum()),
-        "afdb_only_matching_shared": int(
-            (afdb_only["match_status"] == "sequence_identical_to_shared_protein").sum()
+        "afdb_only_superseded": int(
+            (afdb_only["match_status"] == "superseded_by_sequence_match").sum()
         ),
-        "afdb_only_representing_pombase_only": int(
-            (afdb_only["match_status"] == "represents_pombase_only_gene").sum()
+        "afdb_only_duplicate": int(
+            (afdb_only["match_status"] == "duplicate_of_selected_entry").sum()
         ),
         "afdb_only_no_match": int((afdb_only["match_status"] == "no_pombase_match").sum()),
         "afdb_max_length": int(afdb_entries[AfdbCol.LENGTH].max()),
@@ -873,9 +861,6 @@ def build_summary_counts(
         "afdb_accessions_without_pae": len(afdb_accessions - pae_accessions),
         "pae_accessions_without_afdb": len(pae_accessions - afdb_accessions),
         "pombase_internal_stop_peptides": int(pombase_peptides[PeptideCol.INTERNAL_STOP].sum()),
-        "pombase_only_represented": int(
-            (pombase_only["reason"] == "represented_in_afdb_under_other_accession").sum()
-        ),
         "pombase_only_length_cutoff": int(
             (pombase_only["reason"] == "exceeds_afdb_length_cutoff").sum()
         ),
@@ -884,6 +869,16 @@ def build_summary_counts(
         ),
     }
     counts.update(uniprot_resolution_counts(afdb_only))
+    counts.update(uniprot_triangulation_counts(shared_comparison))
+    no_match_entries = int((afdb_only["match_status"] == "no_pombase_match").sum())
+    counts.update(
+        {
+            "merged_shared_rows": len(shared_comparison),
+            "afdb_only_proteins": no_match_entries,
+            "pombase_only_proteins": len(pombase_only),
+            "merged_rows": len(shared_comparison) + no_match_entries + len(pombase_only),
+        }
+    )
     return counts
 
 
@@ -892,84 +887,13 @@ def join_unique(values: pd.Series) -> str:
     return ";".join(sorted({str(value) for value in values if pd.notna(value)}))
 
 
-def build_shared_by_sequence(
-    afdb_only: pd.DataFrame,
-    pombase_genes: pd.DataFrame,
-    pombase_peptides: pd.DataFrame,
-) -> pd.DataFrame:
-    """Build shared rows for PomBase genes matched to AFdb entries by exact sequence."""
-    matched = afdb_only.loc[afdb_only["match_status"] == "represents_pombase_only_gene"].copy()
-    pairs = matched.assign(
-        gene_systematic_id=matched["matched_pombase_only_genes"].str.split(";")
-    ).explode("gene_systematic_id")
-    pairs = pairs.loc[pairs["gene_systematic_id"] != ""]
-
-    grouped = (
-        pairs.groupby("gene_systematic_id")
-        .agg(
-            afdb_accession=(AfdbCol.ACCESSION.value, join_unique),
-            afdb_description=(AfdbCol.DESCRIPTION.value, "first"),
-            afdb_length=(AfdbCol.LENGTH.value, "first"),
-        )
-        .reset_index()
-    )
-
-    genes = pombase_genes.rename(columns={GeneCol.ACCESSION: "pombase_accession"})
-    peptides = pombase_peptides.loc[:, [PeptideCol.SYSTEMATIC_ID, PeptideCol.LENGTH]]
-    grouped = grouped.merge(genes, on=GeneCol.SYSTEMATIC_ID, how="inner")
-    grouped = grouped.merge(peptides, on=PeptideCol.SYSTEMATIC_ID, how="inner")
-
-    grouped["category"] = "shared"
-    grouped["match_method"] = "sequence"
-    grouped["uniprot_id"] = grouped["afdb_accession"].str.split(";").str[0]
-    grouped["length_delta"] = 0
-    grouped["sequence_category"] = "identical"
-    grouped["n_substitutions"] = 0
-    grouped["n_afdb_extra"] = 0
-    grouped["n_pombase_extra"] = 0
-    grouped["n_afdb_extra_terminal"] = 0
-    grouped["n_pombase_extra_terminal"] = 0
-    grouped["identity_pct"] = 100.0
-    grouped["pae_available"] = True
-    grouped["duplicate_afdb_accessions"] = ""
-    grouped["notes"] = "matched_by_sequence; pombase_accession_not_in_afdb"
-    has_no_accession = grouped["pombase_accession"].isna()
-    grouped.loc[has_no_accession, "notes"] = "matched_by_sequence; pombase_has_no_uniprot_accession"
-    return grouped
-
-
-def add_shared_match_columns(
-    shared_comparison: pd.DataFrame,
-    afdb_only: pd.DataFrame,
-) -> pd.DataFrame:
-    """Add match provenance and duplicate AFdb accessions to ID-matched shared rows."""
-    duplicates = afdb_only.loc[
-        afdb_only["match_status"] == "sequence_identical_to_shared_protein"
-    ].copy()
-    duplicate_pairs = duplicates.assign(
-        gene_systematic_id=duplicates["matched_shared_genes"].str.split(";")
-    ).explode("gene_systematic_id")
-    duplicate_pairs = duplicate_pairs.loc[duplicate_pairs["gene_systematic_id"] != ""]
-    duplicate_map = (
-        duplicate_pairs.groupby("gene_systematic_id")[AfdbCol.ACCESSION.value]
-        .agg(join_unique)
-        .to_dict()
-    )
-
-    annotated = shared_comparison.assign(
-        category="shared",
-        match_method="uniprot_id",
-        afdb_accession=shared_comparison[ComparisonCol.ACCESSION],
-        pombase_accession=shared_comparison[ComparisonCol.ACCESSION],
-        pae_available=True,
-        duplicate_afdb_accessions=shared_comparison[GeneCol.SYSTEMATIC_ID]
-        .map(duplicate_map)
-        .fillna(""),
-    )
-    annotated["notes"] = ""
-    has_duplicates = annotated["duplicate_afdb_accessions"] != ""
-    annotated.loc[has_duplicates, "notes"] = "afdb_secondary_accession"
-    return annotated
+def build_shared_by_sequence(shared_comparison: pd.DataFrame) -> pd.DataFrame:
+    """Return sequence matches whose selected entry is not the gene's UniProt accession."""
+    is_sequence = shared_comparison["match_method"] == "sequence"
+    is_rescued = shared_comparison["pombase_accession"].isna() | shared_comparison[
+        "afdb_accession"
+    ].ne(shared_comparison["pombase_accession"])
+    return shared_comparison.loc[is_sequence & is_rescued].reset_index(drop=True)
 
 
 def build_afdb_only_rows(afdb_only: pd.DataFrame) -> pd.DataFrame:
@@ -1007,15 +931,12 @@ def build_afdb_only_rows(afdb_only: pd.DataFrame) -> pd.DataFrame:
 
 def build_pombase_only_rows(pombase_only: pd.DataFrame) -> pd.DataFrame:
     """Build main-table rows for PomBase genes with no AFdb structure."""
-    unrepresented = pombase_only.loc[
-        pombase_only["reason"] != "represented_in_afdb_under_other_accession"
-    ].copy()
-    return unrepresented.assign(
+    return pombase_only.assign(
         category="pombase_only",
         match_method="none",
-        uniprot_id=unrepresented["uniprot_id"],
+        uniprot_id=pombase_only["uniprot_id"],
         afdb_accession=np.nan,
-        pombase_accession=unrepresented["uniprot_id"],
+        pombase_accession=pombase_only["uniprot_id"],
         gene_type=PROTEIN_CODING,
         afdb_description=np.nan,
         afdb_length=np.nan,
@@ -1029,19 +950,18 @@ def build_pombase_only_rows(pombase_only: pd.DataFrame) -> pd.DataFrame:
         identity_pct=np.nan,
         pae_available=False,
         duplicate_afdb_accessions="",
-        notes=unrepresented["reason"],
+        notes=pombase_only["reason"],
     )
 
 
 def build_merged_table(
-    shared_by_id: pd.DataFrame,
-    shared_by_sequence: pd.DataFrame,
+    shared_rows: pd.DataFrame,
     afdb_only_rows: pd.DataFrame,
     pombase_only_rows: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Concatenate the unified protein table and select the report columns."""
+    """Concatenate the gene-level rows and select the report columns."""
     merged = pd.concat(
-        [shared_by_id, shared_by_sequence, afdb_only_rows, pombase_only_rows],
+        [shared_rows, afdb_only_rows, pombase_only_rows],
         ignore_index=True,
     ).reindex(columns=MERGED_COLUMNS)
     for column in INTEGER_COLUMNS:
@@ -1049,35 +969,11 @@ def build_merged_table(
     return merged
 
 
-def build_afdb_sequence_table(
-    shared_by_id: pd.DataFrame,
-    afdb_only: pd.DataFrame,
-) -> pd.DataFrame:
-    """Build one AFdb sequence per gene, preferring the primary accession."""
-    matched = afdb_only.loc[
-        afdb_only["match_status"].isin(
-            ["sequence_identical_to_shared_protein", "represents_pombase_only_gene"]
-        )
-    ]
-    secondary_rows = []
-    for gene_column in ("matched_shared_genes", "matched_pombase_only_genes"):
-        pairs = matched.assign(gene_systematic_id=matched[gene_column].str.split(";")).explode(
-            "gene_systematic_id"
-        )
-        is_gene = pairs["gene_systematic_id"].notna() & (pairs["gene_systematic_id"] != "")
-        secondary_rows.append(
-            pairs.loc[
-                is_gene,
-                ["gene_systematic_id", AfdbCol.ACCESSION, AfdbCol.SEQUENCE, AfdbCol.LENGTH],
-            ].rename(columns={AfdbCol.ACCESSION: "afdb_accession"})
-        )
-
-    primary_rows = shared_by_id.loc[
+def build_afdb_sequence_table(shared_comparison: pd.DataFrame) -> pd.DataFrame:
+    """Return the selected AFdb sequence for every paired gene."""
+    return shared_comparison.loc[
         :, ["gene_systematic_id", "afdb_accession", AfdbCol.SEQUENCE, AfdbCol.LENGTH]
-    ]
-    combined = pd.concat([*secondary_rows, primary_rows], ignore_index=True)
-    # Primary rows come last, so they win for genes that also have a secondary entry.
-    return combined.drop_duplicates("gene_systematic_id", keep="last").reset_index(drop=True)
+    ].drop_duplicates("gene_systematic_id", keep="first")
 
 
 def build_dy47073_gene_table(
@@ -1349,20 +1245,16 @@ def dy47073_counts(dy_result: Dy47073Result) -> dict[str, int]:
 def build_afdb_entry_table(
     afdb_entries: pd.DataFrame,
     pae_accessions: set[str],
-    shared_by_id: pd.DataFrame,
-    shared_by_sequence: pd.DataFrame,
+    shared_comparison: pd.DataFrame,
     afdb_only: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Map every AFdb entry to its protein entity and entry role."""
+    """Map every AFdb entry to its selected gene(s) and entry role."""
     roles = pd.concat(
-        [
-            build_primary_entry_roles(shared_by_id),
-            build_duplicate_entry_roles(shared_by_id),
-            build_sequence_entry_roles(shared_by_sequence),
-            build_unmatched_entry_roles(afdb_only),
-        ],
+        [build_selected_entry_roles(shared_comparison), build_unpaired_entry_roles(afdb_only)],
         ignore_index=True,
     )
+    roles["_priority"] = roles["entry_role"].map(ROLE_PRIORITY)
+    roles = roles.sort_values(["afdb_accession", "_priority"], kind="stable")
     roles = roles.groupby("afdb_accession", as_index=False).agg(
         gene_systematic_id=("gene_systematic_id", join_unique),
         gene_name=("gene_name", join_unique),
@@ -1372,14 +1264,16 @@ def build_afdb_entry_table(
         notes=("notes", join_unique),
     )
     roles["entity_category"] = np.where(
-        roles["entry_role"] == "no_pombase_match", "afdb_only", "shared"
+        roles["entry_role"].isin(["duplicate_of_selected_entry", "no_pombase_match"]),
+        "afdb_only",
+        "shared",
     )
 
     roles = roles.rename(columns={"afdb_accession": AfdbCol.ACCESSION.value})
     table = afdb_entries.merge(roles, on=AfdbCol.ACCESSION, how="left")
     if table["entry_role"].isna().any():
         missing = table.loc[table["entry_role"].isna(), AfdbCol.ACCESSION].tolist()
-        raise ValueError(f"AFdb entries without a protein-entity mapping: {missing[:10]}")
+        raise ValueError(f"AFdb entries without a role: {missing[:10]}")
 
     table["pae_available"] = table[AfdbCol.ACCESSION].isin(pae_accessions)
     table = table.rename(columns={AfdbCol.ACCESSION: "afdb_accession"})
@@ -1401,96 +1295,36 @@ def build_afdb_entry_table(
     ]
 
 
-def build_primary_entry_roles(shared_by_id: pd.DataFrame) -> pd.DataFrame:
-    """Build entry roles for the current AFdb primary accession of shared genes."""
-    return shared_by_id.assign(
-        entry_role="primary",
-        protein_entity_accession=shared_by_id["afdb_accession"],
-        notes="primary",
-    ).loc[
-        :,
-        [
-            "afdb_accession",
-            "gene_systematic_id",
-            "gene_name",
-            "pombase_accession",
-            "entry_role",
-            "protein_entity_accession",
-            "notes",
-        ],
-    ]
-
-
-def build_duplicate_entry_roles(shared_by_id: pd.DataFrame) -> pd.DataFrame:
-    """Build entry roles for AFdb duplicate entries listed on shared rows."""
-    duplicates = shared_by_id.loc[shared_by_id["duplicate_afdb_accessions"] != ""].copy()
-    duplicates["entry_role"] = "duplicate_secondary_accession"
-    duplicates["protein_entity_accession"] = duplicates["afdb_accession"]
-    duplicates["notes"] = "duplicate of " + duplicates["protein_entity_accession"]
-    duplicates = duplicates.assign(
-        afdb_accession=duplicates["duplicate_afdb_accessions"].str.split(";")
-    ).explode("afdb_accession")
-    return duplicates.loc[
-        :,
-        [
-            "afdb_accession",
-            "gene_systematic_id",
-            "gene_name",
-            "pombase_accession",
-            "entry_role",
-            "protein_entity_accession",
-            "notes",
-        ],
-    ]
-
-
-def build_sequence_entry_roles(shared_by_sequence: pd.DataFrame) -> pd.DataFrame:
-    """Build entry roles for AFdb entries matched to PomBase genes by sequence."""
-    sequence = shared_by_sequence.copy()
-    sequence["entry_role"] = "sequence_matched"
-    sequence["protein_entity_accession"] = sequence["uniprot_id"]
-    sequence["notes"] = "matched_by_sequence"
-    sequence = sequence.assign(afdb_accession=sequence["afdb_accession"].str.split(";")).explode(
-        "afdb_accession"
+def build_selected_entry_roles(shared_comparison: pd.DataFrame) -> pd.DataFrame:
+    """Build entry roles for AFdb entries selected by a gene."""
+    roles = shared_comparison.loc[
+        :, ["afdb_accession", "gene_systematic_id", "gene_name", "uniprot_id", "pombase_accession"]
+    ].copy()
+    roles["entry_role"] = np.where(
+        roles["afdb_accession"].eq(roles["uniprot_id"]), "primary", "sequence_matched"
     )
-    return sequence.loc[
-        :,
-        [
-            "afdb_accession",
-            "gene_systematic_id",
-            "gene_name",
-            "pombase_accession",
-            "entry_role",
-            "protein_entity_accession",
-            "notes",
-        ],
-    ]
+    roles["protein_entity_accession"] = roles["pombase_accession"].fillna(roles["afdb_accession"])
+    roles["notes"] = np.where(roles["entry_role"].eq("primary"), "primary", "matched_by_sequence")
+    return roles
 
 
-def build_unmatched_entry_roles(afdb_only: pd.DataFrame) -> pd.DataFrame:
-    """Build entry roles for AFdb entries with no PomBase match."""
-    unmatched = afdb_only.loc[afdb_only["match_status"] == "no_pombase_match"].copy()
-    unmatched["entry_role"] = "no_pombase_match"
-    unmatched["protein_entity_accession"] = unmatched[AfdbCol.ACCESSION]
-    unmatched["gene_systematic_id"] = ""
-    unmatched["gene_name"] = ""
-    unmatched["pombase_accession"] = ""
-    unmatched["notes"] = "no_pombase_match"
-    if "is_secondary" in unmatched.columns:
-        is_secondary = unmatched["is_secondary"] == "True"
-        unmatched.loc[is_secondary, "notes"] = "no_pombase_match; uniprot_secondary"
-    return unmatched.loc[
-        :,
-        [
-            AfdbCol.ACCESSION,
-            "gene_systematic_id",
-            "gene_name",
-            "pombase_accession",
-            "entry_role",
-            "protein_entity_accession",
-            "notes",
-        ],
-    ].rename(columns={AfdbCol.ACCESSION: "afdb_accession"})
+def build_unpaired_entry_roles(afdb_only: pd.DataFrame) -> pd.DataFrame:
+    """Build entry roles for AFdb entries that no gene selected."""
+    roles = afdb_only.rename(columns={AfdbCol.ACCESSION: "afdb_accession"}).copy()
+    roles["entry_role"] = roles["match_status"]
+    roles["protein_entity_accession"] = roles["afdb_accession"]
+    roles["gene_systematic_id"] = (
+        roles["superseded_gene"]
+        .where(
+            roles["match_status"].eq("superseded_by_sequence_match"),
+            roles["matched_pombase_genes"],
+        )
+        .fillna("")
+    )
+    roles["gene_name"] = ""
+    roles["pombase_accession"] = ""
+    roles["notes"] = roles["match_status"]
+    return roles
 
 
 # =============================================================================
@@ -1531,7 +1365,9 @@ def render_view(
 
 
 def render_set_overview(counts: dict[str, int], config: Config) -> str:
-    """Render the set-membership overview section."""
+    """Render the matching-overview section."""
+    selected_entries = counts["afdb_entries"] - counts["afdb_only_accessions"]
+    accession_without_entry = counts["sequence_rescued_genes"] - counts["afdb_only_superseded"]
     rows = [
         ("AFdb 结构条目(全部 F1 片段)", counts["afdb_entries"]),
         ("AFdb 唯一 UniProt accession", counts["afdb_unique_accessions"]),
@@ -1539,19 +1375,22 @@ def render_set_overview(counts: dict[str, int], config: Config) -> str:
         ("PomBase protein coding genes", counts["pombase_coding_genes"]),
         ("PomBase 有 UniProt accession 的基因", counts["pombase_genes_with_accession"]),
         ("PomBase 唯一 UniProt accession", counts["pombase_unique_accessions"]),
-        ("共有 accession", counts["shared_accessions"]),
-        ("AFdb 特有 accession(含重复/序列匹配)", counts["afdb_only_accessions"]),
-        ("PomBase 特有 accession", counts["pombase_only_accessions"]),
-        ("PomBase 无 UniProt accession 的基因", counts["pombase_genes_without_accession"]),
-        ("共有基因(UniProt ID 匹配)", counts["shared_genes"]),
-        ("共有基因(序列匹配)", counts["shared_by_sequence_genes"]),
-        ("共有基因合计(合并表 shared)", counts["merged_shared_rows"]),
-        ("AFdb 特有蛋白(合并表 afdb_only)", counts["afdb_only_proteins"]),
-        ("PomBase 特有基因(合并表 pombase_only)", counts["pombase_only_proteins"]),
+        ("被选中的 AFdb 条目", selected_entries),
+        ("合并表 shared 行", counts["shared_genes"]),
+        ("  按蛋白序列精确匹配", counts["shared_by_sequence_genes"]),
+        ("  按 UniProt ID 回退(序列不一致)", counts["shared_by_id_genes"]),
+        ("  序列匹配但更换了 AFdb 条目", counts["sequence_rescued_genes"]),
+        ("未选中的 AFdb 条目", counts["afdb_only_accessions"]),
+        ("  被序列匹配取代的旧条目", counts["afdb_only_superseded"]),
+        ("  重复/次级条目", counts["afdb_only_duplicate"]),
+        ("  无 PomBase 匹配", counts["afdb_only_no_match"]),
+        ("PomBase-only 基因", counts["pombase_only_genes"]),
+        ("合并表 afdb_only 行", counts["afdb_only_proteins"]),
+        ("合并表 pombase_only 行", counts["pombase_only_proteins"]),
         ("合并表总行数", counts["merged_rows"]),
     ]
     table = "\n".join(f"| {name} | {value:,} |" for name, value in rows)
-    return f"""## 1. 集合总览
+    return f"""## 1. 匹配总览
 
 数据版本:
 
@@ -1560,12 +1399,26 @@ def render_set_overview(counts: dict[str, int], config: Config) -> str:
 - AFdb 序列取 CIF 的 `_entity_poly.pdbx_seq_one_letter_code_can`(实际建模序列)。
 - PomBase 序列取 `peptide.fa`(在第一个终止符处截断;本版本有
   {counts["pombase_internal_stop_peptides"]} 条内部终止符记录)。
-- 主匹配键为 UniProt accession;PomBase 无 accession 或 accession 不在 AFdb 时,
-  再用 peptide 与 AFdb 序列做精确匹配。合并表 `match_method` 列记录 `uniprot_id` 或 `sequence`。
+
+匹配顺序:
+
+1. **蛋白序列完全一致**:为每个基因选择序列与 PomBase peptide 完全相同的 AFdb 条目。
+   同一基因有多个候选时,优先使用该基因自身的 UniProt accession。
+2. **UniProt accession 回退**:没有精确序列条目时,使用基因自身的 UniProt 条目并比较序列差异。
+3. **无结构**:两者都不可用时记为 PomBase-only。
+
+合并表 `match_method` 列记录 `sequence` 或 `uniprot_id`。序列匹配但更换了条目的
+{counts["sequence_rescued_genes"]:,} 个基因中,{counts["afdb_only_superseded"]:,} 个的原始
+UniProt 条目序列与 PomBase 不同,其余 {accession_without_entry:,}
+个的 accession 不在 AFdb。
 
 | 项目 | 数量 |
 |---|---:|
 {table}
+
+未选中的 {counts["afdb_only_accessions"]:,} 个条目中,只有 {counts["afdb_only_no_match"]:,} 个
+无 PomBase 匹配的条目以 `afdb_only` 行进入合并表;被序列匹配取代和重复的条目属于已配对基因,
+不重复计入。
 """
 
 
@@ -1582,31 +1435,32 @@ def render_length_section(shared_comparison: pd.DataFrame, counts: dict[str, int
         [
             GeneCol.SYSTEMATIC_ID,
             GeneCol.GENE_NAME,
-            ComparisonCol.ACCESSION,
+            "afdb_accession",
             ComparisonCol.AFDB_LENGTH,
             ComparisonCol.POMBASE_LENGTH,
             ComparisonCol.LENGTH_DELTA,
         ],
     ]
-    top.columns = ["gene", "name", "UniProt", "AFdb 长度", "PomBase 长度", "差值"]
+    top.columns = ["gene", "name", "AFdb 条目", "AFdb 长度", "PomBase 长度", "差值"]
     table = markdown_table(top, list(top.columns))
-    return f"""## 2. 共有蛋白的长度一致性
+    return f"""## 2. 配对蛋白的长度一致性
 
-以下统计基于 {counts["shared_genes"]:,} 个 UniProt ID 匹配的共有基因对;
-另有 {counts["shared_by_sequence_genes"]:,} 个序列匹配的共有基因对,均为等长且完全一致。
+{counts["shared_by_sequence_genes"]:,} 个序列精确匹配的基因对长度必然相等;
+以下统计基于全部 {counts["shared_genes"]:,} 个基因对,长度差异只可能来自
+{counts["shared_by_id_genes"]:,} 个 UniProt ID 回退对。
 
-- 长度相同:{counts["same_length_pairs"]:,} / {counts["shared_genes"]:,} 个共有基因对。
-- 长度不同:{counts["length_diff_pairs"]:,} / {counts["shared_genes"]:,} 个共有基因对。
+- 长度相同:{counts["same_length_pairs"]:,} / {counts["shared_genes"]:,} 个基因对。
+- 长度不同:{counts["length_diff_pairs"]:,} / {counts["shared_genes"]:,} 个基因对。
 - AFdb 最长建模序列:{counts["afdb_max_length"]:,} aa。
 - PomBase 全蛋白组最长:{counts["pombase_max_length"]:,} aa;
-  共有蛋白中 PomBase 最长:{counts["pombase_max_shared_length"]:,} aa。
+  配对蛋白中 PomBase 最长:{counts["pombase_max_shared_length"]:,} aa。
 
-长度差异最大的 15 个共有基因对:
+长度差异最大的 15 个基因对:
 
 {table}
 
-注:最大的几例(gpi14、sap34、rhp16)经 UniProt 复核,AFdb 序列与当前 UniProt 长度一致;
-差异来自 UniProt 与 PomBase 基因模型不一致,而不是 AFdb 截断。
+注:差异来自 UniProt 与 PomBase 基因模型不一致,或 AFdb v6 使用了较旧的 UniProt 序列,
+而不是 AFdb 截断;最大几例(gpi14、sap34、rhp16)经 UniProt 复核已确认。
 """
 
 
@@ -1631,7 +1485,7 @@ def render_sequence_section(shared_comparison: pd.DataFrame, counts: dict[str, i
         [
             GeneCol.SYSTEMATIC_ID,
             GeneCol.GENE_NAME,
-            ComparisonCol.ACCESSION,
+            "afdb_accession",
             ComparisonCol.AFDB_LENGTH,
             ComparisonCol.POMBASE_LENGTH,
             ComparisonCol.CATEGORY,
@@ -1644,7 +1498,7 @@ def render_sequence_section(shared_comparison: pd.DataFrame, counts: dict[str, i
     top.columns = [
         "gene",
         "name",
-        "UniProt",
+        "AFdb 条目",
         "AFdb",
         "PomBase",
         "类型",
@@ -1663,16 +1517,17 @@ def render_sequence_section(shared_comparison: pd.DataFrame, counts: dict[str, i
         [
             GeneCol.SYSTEMATIC_ID,
             GeneCol.GENE_NAME,
-            ComparisonCol.ACCESSION,
+            "afdb_accession",
             ComparisonCol.N_SUBSTITUTIONS,
             ComparisonCol.IDENTITY_PCT,
         ],
     ]
-    substitution_view.columns = ["gene", "name", "UniProt", "替换数", "identity %"]
+    substitution_view.columns = ["gene", "name", "AFdb 条目", "替换数", "identity %"]
     substitution_table = markdown_table(substitution_view, list(substitution_view.columns))
 
     if "uniprot_check_pombase_matches" in counts:
-        triangulation_note = f"""三方核对(2026-11-04 当前 UniProt):
+        triangulation_note = f"""UniProt 三方核对(覆盖 {counts["shared_by_id_genes"]:,} 个 ID 回退对
+及 {counts["afdb_only_superseded"]:,} 个被序列匹配取代的旧条目):
 
 - {counts["uniprot_check_pombase_matches"]:,} 个:PomBase == 当前 UniProt,AFdb 不同
   → AFdb v6 使用了旧序列,当前参考应以 PomBase/UniProt 为准。
@@ -1683,15 +1538,14 @@ def render_sequence_section(shared_comparison: pd.DataFrame, counts: dict[str, i
     else:
         triangulation_note = (
             "本次额外对照了 2023-07-01、2024-03-01、2025-05-01、2025-06-01、2026-11-01 "
-            "五个 PomBase release:102 个非一致蛋白中有 86 个的 AFdb 长度不等于任何一个 "
-            "release 的 peptide 长度,说明差异主要不是 PomBase 版本更新造成的。\n"
+            "五个 PomBase release:非一致蛋白中多数 AFdb 长度不等于任何一个 release 的 "
+            "peptide 长度,说明差异主要不是 PomBase 版本更新造成的。\n"
         )
 
-    return f"""## 3. 共有蛋白的序列一致性
+    return f"""## 3. 配对蛋白的序列一致性
 
-以下统计基于 {counts["shared_genes"]:,} 个 UniProt ID 匹配的共有基因对;
-另有 {counts["shared_by_sequence_genes"]:,} 个序列匹配对均为 identical,
-加上后完全一致共 {identical + counts["shared_by_sequence_genes"]:,} 个。
+{counts["shared_by_sequence_genes"]:,} 个基因对按精确序列配对,均为 identical;
+其余 {counts["shared_by_id_genes"]:,} 个无精确序列结构的基因按 UniProt ID 回退比较。
 
 | 类型 | 数量 |
 |---|---:|
@@ -1716,72 +1570,74 @@ def render_sequence_section(shared_comparison: pd.DataFrame, counts: dict[str, i
 
 
 def render_afdb_only_section(afdb_only: pd.DataFrame, counts: dict[str, int]) -> str:
-    """Render the AFdb-only reconciliation section."""
+    """Render the unselected-AFdb-entry reconciliation section."""
     status_counts = afdb_only["match_status"].value_counts()
     status_rows = "\n".join(
         f"| {status} | {int(status_counts.get(status, 0)):,} |" for status in AFDB_ONLY_STATUSES
     )
+    superseded = afdb_only.loc[
+        afdb_only["match_status"] == "superseded_by_sequence_match"
+    ].sort_values(AfdbCol.LENGTH, ascending=False)
+    superseded_view = superseded.loc[
+        :, ["superseded_gene", AfdbCol.ACCESSION, AfdbCol.DESCRIPTION, AfdbCol.LENGTH]
+    ].head(30)
+    superseded_view.columns = ["gene", "原 AFdb 条目", "描述", "长度"]
+    superseded_table = markdown_table(superseded_view, list(superseded_view.columns))
+
+    duplicates = afdb_only.loc[
+        afdb_only["match_status"] == "duplicate_of_selected_entry"
+    ].sort_values(AfdbCol.LENGTH, ascending=False)
+    duplicate_view = duplicates.loc[
+        :, [AfdbCol.ACCESSION, AfdbCol.DESCRIPTION, AfdbCol.LENGTH, "matched_pombase_genes"]
+    ].head(30)
+    duplicate_view.columns = ["AFdb 条目", "描述", "长度", "序列匹配的基因"]
+    duplicate_table = markdown_table(duplicate_view, list(duplicate_view.columns))
+
     unmatched = afdb_only.loc[afdb_only["match_status"] == "no_pombase_match"].copy()
     unmatched = unmatched.sort_values(AfdbCol.LENGTH, ascending=False)
     unmatched_view = unmatched.loc[
         :, [AfdbCol.ACCESSION, AfdbCol.DESCRIPTION, AfdbCol.LENGTH]
     ].head(30)
-    unmatched_view.columns = ["UniProt", "描述", "长度"]
+    unmatched_view.columns = ["AFdb 条目", "描述", "长度"]
     unmatched_table = markdown_table(unmatched_view, list(unmatched_view.columns))
-
-    matched = afdb_only.loc[afdb_only["match_status"] != "no_pombase_match"].copy()
-    matched_view = matched.loc[
-        :,
-        [
-            AfdbCol.ACCESSION,
-            AfdbCol.LENGTH,
-            "match_status",
-            "matched_shared_genes",
-            "matched_pombase_only_genes",
-        ],
-    ].head(30)
-    matched_view.columns = ["UniProt", "长度", "状态", "匹配的共有基因", "匹配的 PomBase-only 基因"]
-    matched_table = markdown_table(matched_view, list(matched_view.columns))
 
     uniprot_note = ""
     if "uniprot_resolved" in counts:
-        stale_secondary = (
-            counts["uniprot_secondary_in_pombase"] - counts["afdb_only_matching_shared"]
-        )
         uniprot_note = (
-            "UniProt accession 复核(独立于序列匹配):\n\n"
-            f"- {counts['uniprot_resolved']:,} 个 AFdb-only accession "
-            "全部解析到当前 UniProt 条目。\n"
+            "UniProt accession 复核(仅针对 accession 不在 PomBase 的重复/无匹配条目):\n\n"
+            f"- 快照覆盖 {counts['uniprot_resolved']:,} 个条目。\n"
             f"- {counts['uniprot_secondary']:,} 个是次级 accession;"
-            f"{counts['uniprot_secondary_in_pombase']:,} 个的当前 primary 在 PomBase 中,"
-            f"其中 {counts['afdb_only_matching_shared']:,} 个与当前 peptide 完全一致,"
-            f"{stale_secondary:,} 个序列版本较旧。\n"
+            f"{counts['uniprot_secondary_in_pombase']:,} 个的当前 primary 在 PomBase 中。\n"
             f"- {counts['uniprot_primary']:,} 个是当前 primary 条目,"
             "其 accession 均不在 PomBase 的 protein-coding 映射中。\n"
         )
 
-    return f"""## 4. AFdb 特有蛋白(accession 层面)
+    return f"""## 4. 未被选中的 AFdb 条目
 
-AFdb-only accession 共 {counts["afdb_only_accessions"]:,} 个。
-按 AFdb 序列与 PomBase peptide 的精确匹配分类:
+序列优先后,共有 {counts["afdb_only_accessions"]:,} 个 AFdb 条目没有被任何基因选中。
+按原因分类:
 
 | 状态 | 数量 |
 |---|---:|
 {status_rows}
 
 {uniprot_note}
-- `sequence_identical_to_shared_protein`:该 AFdb 条目的序列与某个共有基因的 peptide 完全相同,
-  通常说明 AFdb 使用了旧/次级 UniProt accession,或该蛋白存在等序列重复条目。
-- `represents_pombase_only_gene`:该 AFdb 条目对应一个 accession 未被 AFdb 使用的 PomBase 基因,
-  说明 PomBase-only 列表中的这个基因其实有结构。
-- `no_pombase_match`:序列与所有 PomBase peptide 都不完全相同,
+- `superseded_by_sequence_match`:该条目的 accession 是某个 PomBase 基因的 UniProt ID,
+  但该基因已按精确序列选择了另一个条目。这是 AFdb v6 旧序列的主要来源。
+- `duplicate_of_selected_entry`:该条目的序列与某个基因完全一致,但该基因使用了自身
+  accession 对应的条目;通常表示 AFdb 中存在等序列重复或次级条目。
+- `no_pombase_match`:序列与所有 PomBase peptide 都不完全相同,也没有 PomBase 基因使用该 accession,
   是真正需要单独核对的 AFdb-only 条目。
 
-序列匹配上的前 30 个 AFdb-only 条目:
+被序列匹配取代的旧条目(前 30 个,按长度降序):
 
-{matched_table}
+{superseded_table}
 
-无 PomBase 精确匹配的 AFdb-only 条目(按长度降序,前 30 个):
+序列重复/次级条目(前 30 个):
+
+{duplicate_table}
+
+无 PomBase 精确匹配的条目(按长度降序,前 30 个):
 
 {unmatched_table}
 """
@@ -1803,15 +1659,11 @@ def render_pombase_only_section(pombase_only: pd.DataFrame, counts: dict[str, in
     ]
     view.columns = ["gene", "name", "product", "UniProt", "长度", "原因", "超过 AFdb 最大长度"]
     table = markdown_table(view, list(view.columns))
-    return f"""## 5. PomBase 特有蛋白
+    return f"""## 5. 无 AFdb 结构的 PomBase 基因
 
-PomBase 侧共有 {counts["pombase_only_genes"]:,} 个基因没有直接的 AFdb accession 匹配
-(其中 {counts["pombase_only_accessions"]:,} 个 accession 不在 AFdb,
-{counts["pombase_genes_without_accession"]:,} 个基因无 UniProt accession)。
+共有 {counts["pombase_only_genes"]:,} 个 protein coding gene 既没有精确序列匹配,
+其 UniProt accession 也不在 AFdb 中。
 
-- 其中 {counts["pombase_only_represented"]:,} 个在 AFdb 中以另一个 accession 存在
-  (见 `matched_afdb_only_accessions` 列),已作为 `match_method=sequence` 计入合并表的
-  shared 类别;下表仍按 accession 层面列出,便于核对。
 - {counts["pombase_only_length_cutoff"]:,} 个超过 AFdb 最大建模长度
   ({counts["afdb_max_length"]:,} aa),AFdb 不建模。
 - 其余 {counts["pombase_only_absent_other"]:,} 个低于长度上限但仍无 AFdb 结构,
@@ -2111,20 +1963,19 @@ def render_recommendations(
 """
     return f"""## {section_number}. 对下游使用的建议
 
-1. **主分析集**:使用 {counts["shared_accessions"]:,} 个 ID 匹配的共有 accession,
-   对应 {counts["shared_genes"]:,} 个基因;加上 {counts["shared_by_sequence_genes"]:,} 个
-   序列匹配基因,合并表共有 {counts["merged_shared_rows"]:,} 个 shared 行。
-   下游以 `results/04_gene_structure_registry.tsv` 的 `in_analysis` 为准。
-2. **AFdb-only 条目**:{counts["afdb_only_matching_shared"]:,} 个与共有蛋白序列完全相同。
-   其中 12 个与 primary 序列相同(真正的重复);62 个是序列与 PomBase 精确一致的替代条目,
-   在注册表中作为这些基因的首选结构。{counts["afdb_only_no_match"]:,} 个无 PomBase
-   精确匹配的条目不进入分析。
-3. **序列不一致的共有蛋白**:共 {nonidentical:,} 个。注册表按"结构序列 == PomBase peptide"
-   选择:62 个使用 AFdb 替代条目,38 个使用 vDulab,SPCC569.03 因预测序列与 PomBase 不符而排除。
-   由于选择条件是序列精确一致,下游不再需要 UniProt/PomBase 坐标转换。
-4. **PomBase-only 基因**:{counts["pombase_only_length_cutoff"]:,} 个长蛋白超过 AFdb 最大建模长度
-   ({counts["afdb_max_length"]:,} aa)。其中 6 个有 vDulab、3 个有 AF3;另外 mat2-Pc/Pi 也有
-   vDulab。sib1 只有 1-702 片段、B5BP45-49 无结构,均排除出分析。
+1. **主分析集**:合并表共有 {counts["merged_shared_rows"]:,} 个 shared 行,其中
+   {counts["shared_by_sequence_genes"]:,} 个按精确序列配对、{counts["shared_by_id_genes"]:,} 个
+   按 UniProt ID 回退。下游以 `results/04_gene_structure_registry.tsv` 的 `in_analysis` 为准。
+2. **序列替换条目**:{counts["sequence_rescued_genes"]:,} 个基因使用的 AFdb 条目不是其
+   UniProt accession 对应的条目;其中 {counts["afdb_only_superseded"]:,} 个原条目序列与
+   PomBase 不同,已列入第 4 节。注册表对这些基因使用序列精确一致的替代条目。
+3. **序列不一致蛋白**:共 {nonidentical:,} 个。注册表对其中 37 个使用 vDulab,
+   SPCC569.03 因预测序列与 PomBase 不符而排除。加上长蛋白,vDulab 共 45 个,AF3 共 3 个。
+   由于 AFdb 结构选择条件是序列精确一致,下游不再需要 UniProt/PomBase 坐标转换。
+4. **无 AFdb 结构的基因**:{counts["pombase_only_genes"]:,} 个;其中
+   {counts["pombase_only_length_cutoff"]:,} 个超过 AFdb 最大建模长度
+   ({counts["afdb_max_length"]:,} aa)。部分长蛋白有 vDulab/AF3 预测;
+   sib1 只有 1-702 片段、B5BP45-49 无结构,均排除出分析。
 5. **PAE 配对**:AFdb 结构 {counts["afdb_entries"]:,} 个,PAE 文件 {counts["pae_entries"]:,} 个;
    结构无 PAE {counts["afdb_accessions_without_pae"]:,} 个,PAE 无结构
    {counts["pae_accessions_without_afdb"]:,} 个。
@@ -2272,7 +2123,7 @@ def write_tables(
 def write_excel(
     config: Config,
     counts: dict[str, int],
-    shared_by_id: pd.DataFrame,
+    shared_comparison: pd.DataFrame,
     shared_by_sequence: pd.DataFrame,
     merged: pd.DataFrame,
     afdb_entry_table: pd.DataFrame,
@@ -2283,25 +2134,26 @@ def write_excel(
     """Write the multi-sheet Excel workbook."""
     summary = pd.DataFrame({"metric": list(counts), "value": list(counts.values())})
     shared = merged.loc[merged["category"] == "shared"]
+    sequence_columns = ["afdb_sequence", "pombase_sequence"]
     workbook_path = config.output_dir / "10_afdb_vs_pombase.xlsx"
 
     with pd.ExcelWriter(workbook_path, engine=EXCEL_ENGINE) as writer:
         summary.to_excel(writer, sheet_name="summary", index=False)
         merged.to_excel(writer, sheet_name="merged", index=False)
         afdb_entry_table.to_excel(writer, sheet_name="afdb_entries", index=False)
-        shared_by_id.drop(columns=["afdb_sequence", "pombase_sequence"]).to_excel(
-            writer, sheet_name="shared_by_id", index=False
+        shared_comparison.loc[shared_comparison["match_method"] == "uniprot_id"].drop(
+            columns=sequence_columns
+        ).to_excel(writer, sheet_name="shared_by_id", index=False)
+        shared_by_sequence.drop(columns=sequence_columns).to_excel(
+            writer, sheet_name="shared_by_sequence", index=False
         )
-        shared_by_sequence.to_excel(writer, sheet_name="shared_by_sequence", index=False)
-        if "relationship" in shared_by_id.columns:
+        if "relationship" in shared_comparison.columns:
             check_columns = [
-                column
-                for column in shared_by_id.columns
-                if column not in ("afdb_sequence", "pombase_sequence")
+                column for column in shared_comparison.columns if column not in sequence_columns
             ]
-            shared_by_id.loc[shared_by_id["relationship"].notna(), check_columns].to_excel(
-                writer, sheet_name="shared_uniprot_check", index=False
-            )
+            shared_comparison.loc[
+                shared_comparison["relationship"].notna(), check_columns
+            ].to_excel(writer, sheet_name="shared_uniprot_check", index=False)
         for category, sheet_name in (
             ("identical", "shared_identical"),
             ("substitution_only", "shared_substitution"),
@@ -2318,13 +2170,13 @@ def write_excel(
             afdb_only_no_sequence["match_status"] == "no_pombase_match"
         ].to_excel(writer, sheet_name="afdb_only_unmatched", index=False)
         afdb_only_no_sequence.loc[
-            afdb_only_no_sequence["match_status"] == "sequence_identical_to_shared_protein"
+            afdb_only_no_sequence["match_status"] == "duplicate_of_selected_entry"
         ].to_excel(writer, sheet_name="afdb_only_duplicates", index=False)
+        afdb_only_no_sequence.loc[
+            afdb_only_no_sequence["match_status"] == "superseded_by_sequence_match"
+        ].to_excel(writer, sheet_name="afdb_only_superseded", index=False)
 
         pombase_only.to_excel(writer, sheet_name="pombase_only_all", index=False)
-        pombase_only.loc[
-            pombase_only["reason"] != "represented_in_afdb_under_other_accession"
-        ].to_excel(writer, sheet_name="pombase_only_unrepresented", index=False)
 
         if dy_result is not None:
             dy_comparison = dy_result.comparison.loc[:, DY47073_COMPARISON_COLUMNS]
@@ -2359,18 +2211,18 @@ def build_dy47073_result(
     gene_catalog: pd.DataFrame,
     pombase_genes: pd.DataFrame,
     pombase_peptides: pd.DataFrame,
-    shared_by_id: pd.DataFrame,
+    shared_comparison: pd.DataFrame,
     afdb_only: pd.DataFrame,
 ) -> Dy47073Result:
     """Build the DY47073 comparison tables from validated inputs."""
     proteins = load_dy47073_proteins(dy47073_fasta, gene_catalog)
-    afdb_sequences = build_afdb_sequence_table(shared_by_id, afdb_only)
+    afdb_sequences = build_afdb_sequence_table(shared_comparison)
     genes = build_dy47073_gene_table(proteins, pombase_peptides, afdb_sequences)
     comparison = build_dy47073_comparison(pombase_genes, pombase_peptides, afdb_sequences, genes)
-    has_triangulation = "relationship" in shared_by_id.columns
+    has_triangulation = "relationship" in shared_comparison.columns
     comparison = (
         comparison.merge(
-            shared_by_id.loc[:, [GeneCol.SYSTEMATIC_ID, "relationship"]],
+            shared_comparison.loc[:, [GeneCol.SYSTEMATIC_ID, "relationship"]],
             on=GeneCol.SYSTEMATIC_ID,
             how="left",
         )
@@ -2400,27 +2252,23 @@ def main() -> int:
         ].reset_index(drop=True)
         pombase_peptides = load_pombase_peptides(config.pombase_dir)
 
-        shared_accessions, afdb_only_accessions, pombase_only_accessions = split_accession_sets(
-            afdb_entries, pombase_genes
-        )
-        shared_genes = pombase_genes.loc[pombase_genes[GeneCol.ACCESSION].isin(shared_accessions)]
-        shared_comparison = attach_comparison(
-            shared_genes,
-            afdb_entries.loc[afdb_entries[AfdbCol.ACCESSION].isin(shared_accessions)],
-            pombase_peptides,
-            build_aligner(),
-        )
+        pairs = assign_structure_accessions(pombase_genes, pombase_peptides, afdb_entries)
+        paired = pairs.loc[pairs["match_method"] != "none"].reset_index(drop=True)
+        unpaired_genes = pairs.loc[pairs["match_method"] == "none"].reset_index(drop=True)
+
+        shared_comparison = attach_comparison(paired, afdb_entries, build_aligner())
         if config.uniprot_triangulation is not None:
+            triangulation = load_uniprot_triangulation(config.uniprot_triangulation).rename(
+                columns={ComparisonCol.ACCESSION.value: "pombase_accession"}
+            )
             shared_comparison = shared_comparison.merge(
-                load_uniprot_triangulation(config.uniprot_triangulation),
-                on=[GeneCol.SYSTEMATIC_ID, ComparisonCol.ACCESSION],
+                triangulation,
+                on=[GeneCol.SYSTEMATIC_ID, "pombase_accession"],
                 how="left",
             )
-        afdb_only = annotate_afdb_only(
-            afdb_entries.loc[afdb_entries[AfdbCol.ACCESSION].isin(afdb_only_accessions)],
-            pombase_peptides,
-            afdb_entries.loc[afdb_entries[AfdbCol.ACCESSION].isin(shared_accessions)],
-            shared_genes,
+        selected_accessions = set(shared_comparison["afdb_accession"])
+        afdb_only = annotate_unpaired_entries(
+            afdb_entries, pombase_genes, pombase_peptides, selected_accessions
         )
         if config.uniprot_resolution is not None:
             pombase_accession_set = set(pombase_genes[GeneCol.ACCESSION].dropna())
@@ -2430,51 +2278,24 @@ def main() -> int:
                 how="left",
             )
         afdb_max_length = int(afdb_entries[AfdbCol.LENGTH].max())
-        pombase_only = pd.concat(
-            [
-                build_pombase_only_missing_accessions(
-                    pombase_genes,
-                    pombase_peptides,
-                    pombase_only_accessions,
-                    afdb_only,
-                    afdb_max_length,
-                ),
-                build_pombase_only(pombase_genes, pombase_peptides, afdb_only, afdb_max_length),
-            ],
-            ignore_index=True,
-        )
+        pombase_only = build_pombase_only(unpaired_genes, afdb_max_length)
         counts = build_summary_counts(
             afdb_entries,
             pae_accessions,
             pombase_genes,
             pombase_peptides,
-            shared_accessions,
-            afdb_only,
-            pombase_only_accessions,
             shared_comparison,
+            afdb_only,
             pombase_only,
         )
-        shared_by_id = add_shared_match_columns(shared_comparison, afdb_only)
-        shared_by_sequence = build_shared_by_sequence(afdb_only, pombase_genes, pombase_peptides)
+        shared_by_sequence = build_shared_by_sequence(shared_comparison)
         merged = build_merged_table(
-            shared_by_id,
-            shared_by_sequence,
+            shared_comparison.assign(category="shared", pae_available=True, notes=""),
             build_afdb_only_rows(afdb_only),
             build_pombase_only_rows(pombase_only),
         )
         afdb_entry_table = build_afdb_entry_table(
-            afdb_entries, pae_accessions, shared_by_id, shared_by_sequence, afdb_only
-        )
-        counts.update(uniprot_triangulation_counts(shared_comparison))
-        counts.update(
-            {
-                "shared_by_id_genes": len(shared_by_id),
-                "shared_by_sequence_genes": len(shared_by_sequence),
-                "merged_shared_rows": len(shared_by_id) + len(shared_by_sequence),
-                "afdb_only_proteins": int((merged["category"] == "afdb_only").sum()),
-                "pombase_only_proteins": int((merged["category"] == "pombase_only").sum()),
-                "merged_rows": len(merged),
-            }
+            afdb_entries, pae_accessions, shared_comparison, afdb_only
         )
 
         dy_result = None
@@ -2484,7 +2305,7 @@ def main() -> int:
                 gene_catalog,
                 pombase_genes,
                 pombase_peptides,
-                shared_by_id,
+                shared_comparison,
                 afdb_only,
             )
             merged = attach_dy47073_to_merged(merged, dy_result)
@@ -2504,7 +2325,7 @@ def main() -> int:
         write_excel(
             config,
             counts,
-            shared_by_id,
+            shared_comparison,
             shared_by_sequence,
             merged,
             afdb_entry_table,

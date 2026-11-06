@@ -6,7 +6,6 @@
 rule build_registry:
     input:
         merged=rules.compare_afdb_pombase.output.merged,
-        afdb_entry_roles=rules.compare_afdb_pombase.output.entry_roles,
         afdb_inventory=rules.afdb_entry_table.output.table,
         triangulation=UNIPROT_TRIANGULATION,
     output:
@@ -24,7 +23,6 @@ rule build_registry:
         CORE_ENV
     shell:
         "python {params.cli} build-registry --merged-table {input.merged} "
-        "--afdb-entry-roles {input.afdb_entry_roles} "
         "--afdb-inventory {input.afdb_inventory} "
         "--uniprot-triangulation {input.triangulation} "
         "--pombase-peptide {params.peptide} "

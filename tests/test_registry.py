@@ -1,23 +1,22 @@
 """Unit tests for the gene structure registry selection rules."""
 
 import pandas as pd
-import pytest
 from src.files import load_gene_table
 from src.registry import (
     AF3_SOURCE,
     AFDB_ALTERNATE,
     AFDB_PRIMARY,
+    AFDB_SEQUENCE_MATCH,
     VDULAB_SOURCE,
     _attach_structure,
     _match_af3,
-    _match_afdb_entries,
     _match_vdulab,
     _selection_reason,
 )
 
 
 def _merged() -> pd.DataFrame:
-    """Build a minimal comparison frame with one identical and one indel gene."""
+    """Build a minimal comparison frame with one sequence match and one ID fallback."""
     return pd.DataFrame(
         {
             "gene_systematic_id": ["geneA", "geneB"],
@@ -46,38 +45,20 @@ def _merged() -> pd.DataFrame:
     )
 
 
-def test_match_afdb_entries_prefers_alternate_sequence() -> None:
-    merged = _merged()
-    entries = pd.DataFrame(
-        {
-            "afdb_accession": ["A", "B", "B_alt"],
-            "protein_entity_accession": ["A", "B", "B"],
-            "entry_role": ["primary", "primary", "duplicate_secondary_accession"],
-            "afdb_description": ["da", "db", "db_alt"],
-            "afdb_length": [3, 3, 3],
-            "pae_available": [True, True, True],
-        }
+def _merged_alternate() -> pd.DataFrame:
+    """Build a frame where geneB is paired to a sequence-identical alternate entry."""
+    return _merged().assign(
+        afdb_accession=["A", "B_alt"],
+        afdb_entry_id=["A", "B_alt"],
+        match_method=["sequence", "sequence"],
+        sequence_category=["identical", "identical"],
+        afdb_length=[3, 3],
+        length_delta=[0, 0],
+        n_substitutions=[0, 0],
+        n_afdb_extra=[0, 0],
+        n_pombase_extra=[0, 0],
+        identity_pct=[100.0, 100.0],
     )
-    sequences = {"A": "AAA", "B": "CCD", "B_alt": "CCC"}
-    exact = _match_afdb_entries(merged, entries, sequences)
-    assert exact.to_dict("records") == [{"gene_systematic_id": "geneB", "afdb_accession": "B_alt"}]
-
-
-def test_match_afdb_entries_rejects_duplicate_exact() -> None:
-    merged = _merged()
-    entries = pd.DataFrame(
-        {
-            "afdb_accession": ["A", "B", "B_alt", "B_other"],
-            "protein_entity_accession": ["A", "B", "B", "B"],
-            "entry_role": ["primary", "primary", "duplicate", "duplicate"],
-            "afdb_description": ["da", "db", "db_alt", "db_other"],
-            "afdb_length": [3, 3, 3, 3],
-            "pae_available": [True, True, True, True],
-        }
-    )
-    sequences = {"A": "AAA", "B": "CCC", "B_alt": "CCC", "B_other": "CCC"}
-    with pytest.raises(ValueError, match="More than one exact AFdb entry"):
-        _match_afdb_entries(merged, entries, sequences)
 
 
 def test_match_vdulab_requires_sequence_equality() -> None:
@@ -96,41 +77,53 @@ def test_match_af3_requires_sequence_equality() -> None:
     ]
 
 
-def test_selection_reason_priority() -> None:
-    merged = _merged()
-    exact = pd.DataFrame({"gene_systematic_id": ["geneB"], "afdb_accession": ["B_alt"]})
-    vdulab = pd.DataFrame({"gene_systematic_id": ["geneB"]})
-    af3 = pd.DataFrame({"gene_systematic_id": ["geneB"]})
-    reasons = _selection_reason(merged, exact, vdulab, af3)
+def test_selection_reason_prefers_ordinary_and_alternate_sequence_matches() -> None:
+    empty = pd.DataFrame({"gene_systematic_id": []})
+    reasons = _selection_reason(_merged_alternate(), empty, empty)
     assert reasons.tolist() == [AFDB_PRIMARY, AFDB_ALTERNATE]
+
+
+def test_attach_structure_marks_missing_accession_as_sequence_match() -> None:
+    registry = _merged_alternate().assign(
+        pombase_accession=[None, "B"],
+        selection_reason=[AFDB_PRIMARY, AFDB_ALTERNATE],
+    )
+    empty = pd.DataFrame(columns=["gene_systematic_id", "structure_id", "structure_sequence"])
+    result = _attach_structure(
+        registry,
+        empty,
+        empty,
+        entry_sequences={"A": "AAA", "B_alt": "CCC"},
+        v4_sequences={},
+    )
+    source = result.set_index("gene_systematic_id")["structure_source"]
+    assert source.loc["geneA"] == AFDB_SEQUENCE_MATCH
 
 
 def test_selection_reason_falls_back_to_vdulab_and_af3() -> None:
     merged = _merged()
     empty = pd.DataFrame({"gene_systematic_id": []})
     vdulab = pd.DataFrame({"gene_systematic_id": ["geneB"]})
-    reasons = _selection_reason(merged, empty, vdulab, empty)
+    reasons = _selection_reason(merged, vdulab, empty)
     assert reasons.tolist() == [AFDB_PRIMARY, VDULAB_SOURCE]
 
     af3 = pd.DataFrame({"gene_systematic_id": ["geneB"]})
-    reasons = _selection_reason(merged, empty, empty, af3)
+    reasons = _selection_reason(merged, empty, af3)
     assert reasons.tolist() == [AFDB_PRIMARY, AF3_SOURCE]
 
 
 def test_attach_structure_assigns_source_and_paths() -> None:
-    registry = _merged().assign(
+    registry = _merged_alternate().assign(
         selection_reason=[AFDB_PRIMARY, AFDB_ALTERNATE],
         relationship=[None, None],
     )
-    exact = pd.DataFrame({"gene_systematic_id": ["geneB"], "afdb_accession": ["B_alt"]})
     vdulab = pd.DataFrame(columns=["gene_systematic_id", "structure_id", "structure_sequence"])
     af3 = pd.DataFrame(columns=["gene_systematic_id", "structure_id", "structure_sequence"])
     result = _attach_structure(
         registry,
-        exact,
         vdulab,
         af3,
-        entry_sequences={"A": "AAA", "B": "CCC", "B_alt": "CCC"},
+        entry_sequences={"A": "AAA", "B_alt": "CCC"},
         v4_sequences={"A": "AAA", "B": "CCD"},
     )
     source = result.set_index("gene_systematic_id")["structure_source"]

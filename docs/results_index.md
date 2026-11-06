@@ -60,14 +60,14 @@ The `01_`–`10_` file prefixes match rows 3.1–3.10 below.
 
 | # | File | Rows | Contents |
 |---|---|---:|---|
-| 3.1 | `01_merged_table.tsv` | 5,142 | Per-gene AFdb/PomBase/UniProt merge; input to the registry |
-| 3.2 | `02_afdb_entry_roles.tsv` | 5,196 | AFdb v6 entry roles against protein entities |
-| 3.3 | `03_shared_comparison.tsv` | 5,100 | Genes present in both sources, field by field |
-| 3.4 | `04_shared_by_sequence.tsv` | 9 | Entries linked by exact sequence only |
-| 3.5 | `05_nonidentical_pairs.tsv` | 101 | Pairs whose sequences differ |
-| 3.6 | `06_afdb_only.tsv` | 100 | Entries without a PomBase gene |
-| 3.7 | `07_pombase_only.tsv` | 26 | Genes without an AFdb structure |
-| 3.8 | `08_summary_counts.tsv` | 45 | Headline counts |
+| 3.1 | `01_merged_table.tsv` | 5,142 | Per-gene sequence-first AFdb/PomBase merge; input to the registry |
+| 3.2 | `02_afdb_entry_roles.tsv` | 5,196 | AFdb v6 entry roles against selected genes |
+| 3.3 | `03_shared_comparison.tsv` | 5,109 | Paired genes, field by field (5,071 sequence + 38 ID fallback) |
+| 3.4 | `04_shared_by_sequence.tsv` | 72 | Sequence matches whose entry is not the gene's UniProt accession |
+| 3.5 | `05_nonidentical_pairs.tsv` | 38 | ID-fallback pairs whose sequences differ |
+| 3.6 | `06_afdb_only.tsv` | 92 | AFdb entries selected by no gene |
+| 3.7 | `07_pombase_only.tsv` | 17 | Genes without an AFdb structure |
+| 3.8 | `08_summary_counts.tsv` | 42 | Headline counts |
 | 3.9 | `09_report.md` | — | Readable report with numbered sections |
 | 3.10 | `10_afdb_vs_pombase.xlsx` | — | Excel workbook of the same tables |
 
