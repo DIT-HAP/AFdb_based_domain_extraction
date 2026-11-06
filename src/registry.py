@@ -41,6 +41,7 @@ from pathlib import Path
 import re
 from typing import TextIO
 
+from Bio import SeqIO
 from Bio.Data.PDBData import protein_letters_3to1
 from Bio.PDB.MMCIFParser import MMCIFParser
 from loguru import logger
@@ -205,16 +206,11 @@ def load_cif_sequences(directory: Path) -> dict[str, str]:
 
 def load_peptides(path: Path) -> dict[str, str]:
     """Map PomBase systematic gene ids to first-stop-truncated peptides."""
-    peptides: dict[str, str] = {}
     with open_text(path) as handle:
-        identifier = ""
-        for line in handle:
-            if line.startswith(">"):
-                identifier = line[1:].split()[0].split(":")[0].rsplit(".", 1)[0]
-                peptides[identifier] = ""
-            else:
-                peptides[identifier] += line.strip()
-    return {gene: sequence.rstrip("*") for gene, sequence in peptides.items()}
+        records = list(SeqIO.parse(handle, "fasta"))
+    genes = [record.id.split(":pep")[0].rsplit(".", 1)[0] for record in records]
+    sequences = [str(record.seq).rstrip("*") for record in records]
+    return dict(zip(genes, sequences, strict=True))
 
 
 def load_gene_fastas(directory: Path) -> dict[str, str]:

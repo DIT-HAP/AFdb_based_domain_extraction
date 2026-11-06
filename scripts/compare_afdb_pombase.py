@@ -88,6 +88,7 @@ import re
 import sys
 from typing import TextIO
 
+from Bio import SeqIO
 from Bio.Align import PairwiseAligner
 from loguru import logger
 import numpy as np
@@ -430,24 +431,11 @@ def truncate_peptide_at_first_stop(raw_sequence: str) -> tuple[str, bool]:
 
 def read_peptide_fasta(path: Path) -> list[tuple[str, str]]:
     """Read raw peptide records from a PomBase FASTA file."""
-    raw_records: list[tuple[str, str]] = []
-    systematic_id = ""
-    chunks: list[str] = []
-
     with open_text(path) as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if line.startswith(">"):
-                if systematic_id:
-                    raw_records.append((systematic_id, "".join(chunks)))
-                header = line[1:].split()[0].split(":pep")[0]
-                systematic_id = header.rsplit(".", 1)[0]
-                chunks = []
-            else:
-                chunks.append(line)
-    if systematic_id:
-        raw_records.append((systematic_id, "".join(chunks)))
-    return raw_records
+        return [
+            (record.id.split(":pep")[0].rsplit(".", 1)[0], str(record.seq))
+            for record in SeqIO.parse(handle, "fasta")
+        ]
 
 
 def load_pombase_peptides(pombase_dir: Path) -> pd.DataFrame:
