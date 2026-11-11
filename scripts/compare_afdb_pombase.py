@@ -1,6 +1,6 @@
 """
-AFdb v6 vs PomBase vs DY47073 Protein Annotation Consistency
-============================================================
+AFdb v6 vs PomBase Protein Annotation Consistency
+=================================================
 
 Compare the proteins modelled in AlphaFold DB release v6 for
 Schizosaccharomyces pombe (proteome UP000002485) with the current PomBase
@@ -24,20 +24,11 @@ AFdb sequences are read from the entry inventory table produced by the
 from ``peptide.fa`` and truncated at the first stop codon. The inventory also
 records PAE availability per entry.
 
-When a DY47073 protein FASTA is supplied, the report adds a third annotation
-layer. DY47073 records are resolved to PomBase gene IDs, collapsed per gene,
-and classified against both PomBase and the selected AFdb sequence: all three
-identical, DY47073 agrees with PomBase only, DY47073 agrees with AFdb only,
-DY47073 differs from both, or DY47073 has no record. DY47073-only proteins
-(mostly PomBase 2026 pseudogenes) and unselected AFdb entries that match a
-DY47073 protein are reported separately.
-
 Input
 -----
 - AFdb v6 entry inventory (``03_afdb_entries.tsv``).
 - PomBase release directory containing ``gene_IDs_names_products.tsv`` and
   ``peptide.fa[.gz]``.
-- Optional DY47073 protein FASTA (one protein record per gene or isoform).
 - Optional UniProt accession resolution TSV for the AFdb-only entries.
 - Optional AFdb/PomBase/current-UniProt triangulation TSV for shared proteins.
 
@@ -54,19 +45,14 @@ Output
 - ``09_report.md``: human-readable difference report.
 - ``10_afdb_vs_pombase.xlsx``: multi-sheet workbook with the merged table and
   per-category sheets.
-- ``dy47073_comparison.tsv``: per-gene three-way comparison (optional).
-- ``dy47073_only.tsv``: DY47073 proteins outside the PomBase coding set (optional).
-- ``afdb_only_dy47073.tsv``: AFdb-only entries matched to DY47073 (optional).
 
 Usage
 -----
-    DY=tmp/afdb_vs_pombase/reference/dy47073
     python compare_afdb_pombase.py \
         --afdb-entries results/01_afdb/03_afdb_entries.tsv \
         --afdb-source /hugedata/YushengYang/AFdb/UP000002485_284812_SCHPO_v6 \
         --pombase-dir tmp/afdb_vs_pombase/reference/pombase-2026-11-01 \
         --output-dir tmp/afdb_vs_pombase/outputs \
-        --dy47073-fasta "$DY/S_pombe_DY47073.liftoff_braker3_polished_240717_protein.fasta" \
         --uniprot-resolution tmp/afdb_vs_pombase/intermediate/uniprot_resolution.tsv \
         --uniprot-triangulation tmp/afdb_vs_pombase/intermediate/uniprot_triangulation.tsv
 
@@ -84,7 +70,6 @@ from datetime import date
 from enum import StrEnum
 import gzip
 from pathlib import Path
-import re
 import sys
 from typing import TextIO
 
@@ -123,12 +108,6 @@ UNIPROT_TRIANGULATION_COLUMNS = [
 ]
 STANDARD_AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWY")
 
-SEQUENCE_CATEGORIES = (
-    "identical",
-    "substitution_only",
-    "indel_only",
-    "both",
-)
 AFDB_ONLY_STATUSES = (
     "superseded_by_sequence_match",
     "duplicate_of_selected_entry",
@@ -187,56 +166,6 @@ INTEGER_COLUMNS = [
     "n_afdb_extra_terminal",
     "n_pombase_extra_terminal",
 ]
-DY47073_COMPARISON_COLUMNS = [
-    "gene_systematic_id",
-    "gene_name",
-    "gene_product",
-    "gene_type",
-    "uniprot_id",
-    "afdb_accession",
-    "afdb_length",
-    "pombase_length",
-    "dy47073_length",
-    "dy47073_n_records",
-    "dy47073_record_ids",
-    "dy47073_internal_stop_truncated",
-    "dy47073_match_pombase",
-    "dy47073_match_afdb",
-    "dy47073_length_delta",
-    "dy47073_vs_pombase",
-    "dy47073_vs_afdb",
-    "relationship",
-    "dy47073_category",
-    "dy47073_notes",
-]
-DY47073_ONLY_COLUMNS = [
-    "gene_systematic_id",
-    "gene_name",
-    "gene_product",
-    "gene_type",
-    "dy47073_record_ids",
-    "dy47073_length",
-    "dy47073_internal_stop_truncated",
-    "dy47073_matching_afdb_accessions",
-    "notes",
-]
-AFDB_ONLY_DY_COLUMNS = [
-    "uniprot_id",
-    "afdb_description",
-    "afdb_length",
-    "dy47073_matching_genes",
-    "dy47073_length",
-    "dy47073_internal_stop_truncated",
-    "dy47073_category",
-]
-DY47073_CATEGORY_LABELS = {
-    "identical": "三者一致或 DY47073 == PomBase(无 AFdb)",
-    "dy_eq_pombase_ne_afdb": "DY47073 == PomBase,AFdb 不同",
-    "dy_eq_afdb_ne_pombase": "DY47073 == AFdb,PomBase 不同",
-    "dy_differs_from_both": "DY47073 与两者都不同",
-    "dy_differs_pombase_no_afdb": "DY47073 与 PomBase 不同,且无 AFdb 结构",
-    "absent_from_dy47073": "DY47073 无该蛋白",
-}
 
 
 class GeneCol(StrEnum):
@@ -283,27 +212,6 @@ class ComparisonCol(StrEnum):
     IDENTITY_PCT = "identity_pct"
 
 
-class DyCol(StrEnum):
-    """DY47073 protein and three-way comparison column names."""
-
-    GENE = "gene_systematic_id"
-    RECORD_ID = "dy47073_record_id"
-    SEQUENCE = "dy47073_sequence"
-    LENGTH = "dy47073_length"
-    N_RECORDS = "dy47073_n_records"
-    RECORD_IDS = "dy47073_record_ids"
-    INTERNAL_STOP = "dy47073_internal_stop_truncated"
-    MATCH_POMBASE = "dy47073_match_pombase"
-    MATCH_AFDB = "dy47073_match_afdb"
-    LENGTH_DELTA = "dy47073_length_delta"
-    VS_POMBASE = "dy47073_vs_pombase"
-    VS_AFDB = "dy47073_vs_afdb"
-    MATCHING_AFDB = "dy47073_matching_afdb_accessions"
-    MATCHING_GENES = "dy47073_matching_genes"
-    CATEGORY = "dy47073_category"
-    NOTES = "dy47073_notes"
-
-
 # =============================================================================
 # 3. CONFIGURATION (Immutable Runtime Parameters)
 # =============================================================================
@@ -318,20 +226,6 @@ class Config:
     pombase_release: str
     uniprot_resolution: Path | None = None
     uniprot_triangulation: Path | None = None
-    dy47073_fasta: Path | None = None
-    dy47073_label: str = "240717"
-
-
-@dataclass(kw_only=True, frozen=True)
-class Dy47073Result:
-    """Container for the DY47073 three-way comparison tables."""
-
-    comparison: pd.DataFrame
-    only: pd.DataFrame
-    afdb_only_matches: pd.DataFrame
-    secondary_matches: pd.DataFrame
-    record_count: int
-    internal_stop_count: int
 
 
 # =============================================================================
@@ -475,65 +369,6 @@ def load_pombase_peptides(pombase_dir: Path) -> pd.DataFrame:
     if unexpected:
         logger.warning(f"Non-standard residues in PomBase peptides: {sorted(unexpected)}")
     return peptides
-
-
-def read_dy47073_fasta(path: Path) -> list[tuple[str, str]]:
-    """Read raw DY47073 protein records from a FASTA file."""
-    raw_records: list[tuple[str, str]] = []
-    record_id = ""
-    chunks: list[str] = []
-
-    with path.open() as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if line.startswith(">"):
-                if record_id:
-                    raw_records.append((record_id, "".join(chunks)))
-                record_id = line[1:].split()[0]
-                chunks = []
-            else:
-                chunks.append(line)
-    if record_id:
-        raw_records.append((record_id, "".join(chunks)))
-    return raw_records
-
-
-def resolve_dy47073_gene(record_id: str, gene_ids: set[str]) -> str | None:
-    """Resolve one DY47073 record ID to a PomBase gene systematic ID."""
-    header = record_id.removeprefix("braker_")
-    candidates = (
-        header,
-        re.sub(r"_\d+\.\(1\+\)$", "", header),
-        re.sub(r"_(?:1|2)$", "", header),
-        re.sub(r"\.\d+$", "", re.sub(r"_(?:1|2)$", "", header)),
-        re.sub(r"\.\d+$", "", re.sub(r"_\d+\.\(1\+\)$", "", header)),
-    )
-    return next((candidate for candidate in candidates if candidate in gene_ids), None)
-
-
-def load_dy47073_proteins(path: Path, gene_catalog: pd.DataFrame) -> pd.DataFrame:
-    """Parse DY47073 proteins into record-level rows with resolved PomBase gene IDs."""
-    gene_ids = set(gene_catalog[GeneCol.SYSTEMATIC_ID])
-    records = []
-    for record_id, raw_sequence in read_dy47073_fasta(path):
-        gene = resolve_dy47073_gene(record_id, gene_ids)
-        records.append((gene or record_id, record_id, raw_sequence.rstrip("*")))
-
-    proteins = pd.DataFrame(
-        records,
-        columns=pd.Index([DyCol.GENE.value, DyCol.RECORD_ID.value, DyCol.SEQUENCE.value]),
-    )
-    proteins[DyCol.LENGTH] = proteins[DyCol.SEQUENCE].str.len()
-    proteins[DyCol.INTERNAL_STOP] = proteins[DyCol.SEQUENCE].str.contains("*", regex=False)
-
-    unexpected = set("".join(proteins[DyCol.SEQUENCE])) - STANDARD_AMINO_ACIDS - {"*"}
-    if unexpected:
-        logger.warning(f"Non-standard residues in DY47073 proteins: {sorted(unexpected)}")
-    internal_stop_count = int(proteins[DyCol.INTERNAL_STOP].sum())
-    if internal_stop_count:
-        logger.warning(f"{internal_stop_count} DY47073 records contain internal stop codons")
-    logger.info(f"Parsed {len(proteins)} DY47073 protein records from {path}")
-    return proteins
 
 
 # =============================================================================
@@ -957,279 +792,6 @@ def build_merged_table(
     return merged
 
 
-def build_afdb_sequence_table(shared_comparison: pd.DataFrame) -> pd.DataFrame:
-    """Return the selected AFdb sequence for every paired gene."""
-    return shared_comparison.loc[
-        :, ["gene_systematic_id", "afdb_accession", AfdbCol.SEQUENCE, AfdbCol.LENGTH]
-    ].drop_duplicates("gene_systematic_id", keep="first")
-
-
-def build_dy47073_gene_table(
-    dy47073_proteins: pd.DataFrame,
-    pombase_peptides: pd.DataFrame,
-    afdb_sequences: pd.DataFrame,
-) -> pd.DataFrame:
-    """Aggregate DY47073 records per gene and flag exact matches to PomBase and AFdb."""
-    annotated = dy47073_proteins.merge(
-        pombase_peptides.loc[:, [PeptideCol.SYSTEMATIC_ID, PeptideCol.SEQUENCE, PeptideCol.LENGTH]],
-        on=GeneCol.SYSTEMATIC_ID,
-        how="left",
-    )
-    annotated = annotated.merge(afdb_sequences, on=GeneCol.SYSTEMATIC_ID, how="left")
-    annotated["match_pombase"] = annotated[DyCol.SEQUENCE] == annotated[PeptideCol.SEQUENCE]
-    annotated["match_afdb"] = annotated[DyCol.SEQUENCE] == annotated[AfdbCol.SEQUENCE]
-
-    grouped = annotated.groupby(DyCol.GENE, as_index=False).agg(
-        **{
-            DyCol.N_RECORDS: (DyCol.RECORD_ID, "size"),
-            DyCol.RECORD_IDS: (DyCol.RECORD_ID, join_unique),
-            DyCol.LENGTH: (DyCol.LENGTH, "max"),
-            DyCol.INTERNAL_STOP: (DyCol.INTERNAL_STOP, "any"),
-            DyCol.MATCH_POMBASE: ("match_pombase", "any"),
-            DyCol.MATCH_AFDB: ("match_afdb", "any"),
-        }
-    )
-    representative = (
-        dy47073_proteins.sort_values(DyCol.LENGTH, ascending=False, kind="stable")
-        .drop_duplicates(DyCol.GENE)
-        .loc[:, [DyCol.GENE, DyCol.SEQUENCE]]
-    )
-    return grouped.merge(representative, on=DyCol.GENE, how="left")
-
-
-def build_dy47073_notes(comparison: pd.DataFrame) -> pd.Series:
-    """Summarise DY47073 isoform and internal-stop flags for one row per gene."""
-    notes = pd.Series("", index=comparison.index, dtype="object")
-    multiple = comparison[DyCol.N_RECORDS] > 1
-    internal_stop = comparison[DyCol.INTERNAL_STOP]
-    notes = notes.mask(internal_stop, "internal_stop")
-    has_notes = notes.ne("")
-    notes = notes.mask(multiple & ~has_notes, "multiple_records")
-    return notes.mask(multiple & has_notes, notes + ";multiple_records")
-
-
-def build_dy47073_comparison(
-    pombase_genes: pd.DataFrame,
-    pombase_peptides: pd.DataFrame,
-    afdb_sequences: pd.DataFrame,
-    dy47073_genes: pd.DataFrame,
-) -> pd.DataFrame:
-    """Build the per-gene three-way comparison for every protein-coding PomBase gene."""
-    base = pombase_genes.merge(
-        pombase_peptides.loc[:, [PeptideCol.SYSTEMATIC_ID, PeptideCol.LENGTH]],
-        on=GeneCol.SYSTEMATIC_ID,
-    )
-    base = base.merge(afdb_sequences, on=GeneCol.SYSTEMATIC_ID, how="left")
-    base = base.rename(columns={PeptideCol.LENGTH: "pombase_length"})
-
-    dy_columns = [
-        GeneCol.SYSTEMATIC_ID,
-        DyCol.N_RECORDS,
-        DyCol.RECORD_IDS,
-        DyCol.LENGTH,
-        DyCol.SEQUENCE,
-        DyCol.INTERNAL_STOP,
-        DyCol.MATCH_POMBASE,
-        DyCol.MATCH_AFDB,
-    ]
-    comparison = base.merge(dy47073_genes.loc[:, dy_columns], on=GeneCol.SYSTEMATIC_ID, how="left")
-    comparison[DyCol.N_RECORDS] = comparison[DyCol.N_RECORDS].fillna(0).astype("Int64")
-    for column in (DyCol.INTERNAL_STOP, DyCol.MATCH_POMBASE, DyCol.MATCH_AFDB):
-        comparison[column] = comparison[column].astype("boolean").fillna(False).astype(bool)
-    comparison[DyCol.RECORD_IDS] = comparison[DyCol.RECORD_IDS].fillna("")
-
-    has_dy = comparison[DyCol.N_RECORDS] > 0
-    has_afdb = comparison[AfdbCol.SEQUENCE].notna()
-    matches_pombase = comparison[DyCol.MATCH_POMBASE]
-    matches_afdb = comparison[DyCol.MATCH_AFDB]
-
-    comparison[DyCol.VS_POMBASE] = np.select(
-        [~has_dy, matches_pombase, comparison[DyCol.LENGTH] == comparison["pombase_length"]],
-        ["absent_from_dy47073", "identical", "same_length_different"],
-        default="different_length",
-    )
-    comparison[DyCol.VS_AFDB] = np.select(
-        [
-            ~has_afdb,
-            ~has_dy,
-            matches_afdb,
-            comparison[DyCol.LENGTH] == comparison[AfdbCol.LENGTH],
-        ],
-        ["no_afdb_structure", "absent_from_dy47073", "identical", "same_length_different"],
-        default="different_length",
-    )
-    comparison[DyCol.CATEGORY] = np.select(
-        [
-            ~has_dy,
-            matches_pombase & (~has_afdb | matches_afdb),
-            matches_pombase & has_afdb & ~matches_afdb,
-            ~matches_pombase & matches_afdb,
-            ~matches_pombase & ~has_afdb,
-        ],
-        [
-            "absent_from_dy47073",
-            "identical",
-            "dy_eq_pombase_ne_afdb",
-            "dy_eq_afdb_ne_pombase",
-            "dy_differs_pombase_no_afdb",
-        ],
-        default="dy_differs_from_both",
-    )
-    comparison[DyCol.LENGTH_DELTA] = comparison[DyCol.LENGTH] - comparison["pombase_length"]
-    for column in (AfdbCol.LENGTH, DyCol.LENGTH, DyCol.LENGTH_DELTA):
-        comparison[column] = comparison[column].astype("Int64")
-    comparison[DyCol.NOTES] = build_dy47073_notes(comparison)
-    return comparison
-
-
-def build_dy47073_only_table(
-    dy47073_genes: pd.DataFrame,
-    dy47073_proteins: pd.DataFrame,
-    gene_catalog: pd.DataFrame,
-    afdb_only: pd.DataFrame,
-) -> pd.DataFrame:
-    """Build the table of DY47073 proteins outside the PomBase protein-coding set."""
-    coding_ids = set(
-        gene_catalog.loc[gene_catalog[GeneCol.GENE_TYPE] == PROTEIN_CODING, GeneCol.SYSTEMATIC_ID]
-    )
-    only = dy47073_genes.loc[~dy47073_genes[DyCol.GENE].isin(coding_ids)].copy()
-    metadata = gene_catalog.set_index(GeneCol.SYSTEMATIC_ID)[
-        [GeneCol.GENE_NAME, GeneCol.PRODUCT, GeneCol.GENE_TYPE]
-    ]
-    only = only.merge(metadata, left_on=DyCol.GENE, right_index=True, how="left")
-    only[GeneCol.GENE_TYPE] = only[GeneCol.GENE_TYPE].fillna("not_in_pombase_2026")
-
-    dy_sequences = dy47073_proteins.loc[:, [DyCol.GENE, DyCol.SEQUENCE]].rename(
-        columns={DyCol.SEQUENCE: AfdbCol.SEQUENCE}
-    )
-    matches = dy_sequences.merge(
-        afdb_only.loc[:, [AfdbCol.SEQUENCE, AfdbCol.ACCESSION]],
-        on=AfdbCol.SEQUENCE,
-        how="inner",
-    )
-    accessions = matches.groupby(DyCol.GENE)[AfdbCol.ACCESSION].agg(join_unique)
-    only[DyCol.MATCHING_AFDB] = only[DyCol.GENE].map(accessions).fillna("")
-
-    only["notes"] = "pombase_2026_pseudogene"
-    only.loc[only[GeneCol.GENE_TYPE] == "not_in_pombase_2026", "notes"] = "not_in_pombase_2026"
-    return only
-
-
-def annotate_afdb_only_with_dy47073(
-    afdb_only: pd.DataFrame,
-    dy47073_proteins: pd.DataFrame,
-) -> pd.DataFrame:
-    """Match AFdb-only entries without a PomBase hit to DY47073 proteins by exact sequence."""
-    unmatched = afdb_only.loc[afdb_only["match_status"] == "no_pombase_match"].copy()
-    dy_sequences = dy47073_proteins.loc[
-        :, [DyCol.GENE, DyCol.SEQUENCE, DyCol.LENGTH, DyCol.INTERNAL_STOP]
-    ].rename(columns={DyCol.SEQUENCE: AfdbCol.SEQUENCE})
-    matches = dy_sequences.merge(
-        unmatched.loc[:, [AfdbCol.SEQUENCE, AfdbCol.ACCESSION]],
-        on=AfdbCol.SEQUENCE,
-        how="inner",
-    )
-    grouped = matches.groupby(AfdbCol.ACCESSION).agg(
-        **{
-            DyCol.MATCHING_GENES: (DyCol.GENE, join_unique),
-            DyCol.LENGTH: (DyCol.LENGTH, "max"),
-            DyCol.INTERNAL_STOP: (DyCol.INTERNAL_STOP, "any"),
-        }
-    )
-    annotated = unmatched.merge(grouped, on=AfdbCol.ACCESSION, how="left")
-    annotated[DyCol.MATCHING_GENES] = annotated[DyCol.MATCHING_GENES].fillna("")
-    annotated[DyCol.INTERNAL_STOP] = (
-        annotated[DyCol.INTERNAL_STOP].astype("boolean").fillna(False).astype(bool)
-    )
-    annotated[DyCol.LENGTH] = annotated[DyCol.LENGTH].astype("Int64")
-    annotated[DyCol.CATEGORY] = np.where(
-        annotated[DyCol.MATCHING_GENES] != "", "dy47073_sequence_match", "no_dy47073_match"
-    )
-    return annotated
-
-
-def build_dy47073_secondary_matches(
-    dy47073_proteins: pd.DataFrame,
-    afdb_only: pd.DataFrame,
-    dy_comparison: pd.DataFrame,
-) -> pd.DataFrame:
-    """Find DY47073 proteins that match an AFdb-only accession other than the gene's primary."""
-    dy_sequences = dy47073_proteins.loc[
-        :, [DyCol.GENE, DyCol.RECORD_ID, DyCol.SEQUENCE, DyCol.LENGTH]
-    ].rename(columns={DyCol.SEQUENCE: AfdbCol.SEQUENCE})
-    matches = dy_sequences.merge(
-        afdb_only.loc[:, [AfdbCol.SEQUENCE, AfdbCol.ACCESSION, AfdbCol.LENGTH]],
-        on=AfdbCol.SEQUENCE,
-        how="inner",
-    )
-    primary = dy_comparison.set_index(GeneCol.SYSTEMATIC_ID)[["afdb_accession", DyCol.VS_POMBASE]]
-    matches = matches.merge(primary, left_on=DyCol.GENE, right_index=True, how="left")
-    is_coding = matches[DyCol.GENE].isin(dy_comparison[GeneCol.SYSTEMATIC_ID])
-    is_secondary = matches["afdb_accession"].isna() | (
-        matches[AfdbCol.ACCESSION] != matches["afdb_accession"]
-    )
-    differs_from_pombase = matches[DyCol.VS_POMBASE] != "identical"
-    keep = is_coding & is_secondary & differs_from_pombase
-    return matches.loc[keep].reset_index(drop=True)
-
-
-def attach_dy47073_to_merged(
-    merged: pd.DataFrame,
-    dy_result: Dy47073Result,
-) -> pd.DataFrame:
-    """Add DY47073 status columns to the unified merged table."""
-    dy_columns = [
-        GeneCol.SYSTEMATIC_ID,
-        DyCol.LENGTH,
-        DyCol.N_RECORDS,
-        DyCol.VS_POMBASE,
-        DyCol.VS_AFDB,
-        DyCol.CATEGORY,
-    ]
-    enriched = merged.merge(
-        dy_result.comparison.loc[:, dy_columns], on=GeneCol.SYSTEMATIC_ID, how="left"
-    )
-    afdb_only_matches = dy_result.afdb_only_matches.set_index(AfdbCol.ACCESSION)
-    is_afdb_only = enriched["category"] == "afdb_only"
-    for column in (DyCol.CATEGORY, DyCol.LENGTH):
-        enriched.loc[is_afdb_only, column] = enriched.loc[is_afdb_only, AfdbCol.ACCESSION].map(
-            afdb_only_matches[column]
-        )
-    enriched[DyCol.CATEGORY] = enriched[DyCol.CATEGORY].fillna("not_compared")
-    return enriched
-
-
-def dy47073_counts(dy_result: Dy47073Result) -> dict[str, int]:
-    """Collect headline counts for the DY47073 three-way comparison."""
-    comparison = dy_result.comparison
-    category = comparison[DyCol.CATEGORY]
-    differs = category == "dy_differs_from_both"
-    same_length = comparison[DyCol.LENGTH] == comparison[PeptideCol.LENGTH]
-    return {
-        "dy47073_records": dy_result.record_count,
-        "dy47073_internal_stop_records": dy_result.internal_stop_count,
-        "dy47073_coding_genes_with_record": int(comparison[DyCol.N_RECORDS].gt(0).sum()),
-        "dy47073_identical": int((category == "identical").sum()),
-        "dy47073_pombase_matches_afdb_differs": int((category == "dy_eq_pombase_ne_afdb").sum()),
-        "dy47073_afdb_matches_pombase_differs": int((category == "dy_eq_afdb_ne_pombase").sum()),
-        "dy47073_differs_from_both": int(differs.sum()),
-        "dy47073_differs_same_length": int((differs & same_length).sum()),
-        "dy47073_differs_different_length": int((differs & ~same_length).sum()),
-        "dy47073_differs_from_pombase_no_afdb": int(
-            (category == "dy_differs_pombase_no_afdb").sum()
-        ),
-        "dy47073_absent_from_pombase": int((category == "absent_from_dy47073").sum()),
-        "dy47073_only_genes": len(dy_result.only),
-        "dy47073_only_with_afdb": int((dy_result.only[DyCol.MATCHING_AFDB] != "").sum()),
-        "afdb_only_dy47073_match": int(
-            (dy_result.afdb_only_matches[DyCol.CATEGORY] == "dy47073_sequence_match").sum()
-        ),
-        "afdb_only_no_dy47073_match": int(
-            (dy_result.afdb_only_matches[DyCol.CATEGORY] == "no_dy47073_match").sum()
-        ),
-    }
-
-
 def build_afdb_entry_table(
     afdb_entries: pd.DataFrame,
     pae_accessions: set[str],
@@ -1334,22 +896,6 @@ def markdown_table(frame: pd.DataFrame, columns: list[str]) -> str:
         for row in frame.loc[:, columns].itertuples(index=False, name=None)
     ]
     return "\n".join([header, separator, *body])
-
-
-def render_view(
-    frame: pd.DataFrame,
-    columns: list[str],
-    headers: list[str],
-    sort_column: str | None = None,
-    limit: int | None = None,
-) -> str:
-    """Render an optionally sorted and truncated DataFrame view as a Markdown table."""
-    view = frame.sort_values(sort_column, ascending=False) if sort_column else frame
-    if limit is not None:
-        view = view.head(limit)
-    view = view.loc[:, columns]
-    view.columns = headers
-    return markdown_table(view, headers)
 
 
 def render_set_overview(counts: dict[str, int], config: Config) -> str:
@@ -1661,295 +1207,12 @@ def render_pombase_only_section(pombase_only: pd.DataFrame, counts: dict[str, in
 """
 
 
-def render_dy47073_section(
-    dy_result: Dy47073Result,
-    counts: dict[str, int],
-    config: Config,
-) -> str:
-    """Render the DY47073 three-way comparison section."""
-    comparison = dy_result.comparison
-    category_counts = (
-        comparison[DyCol.CATEGORY]
-        .value_counts()
-        .reindex(list(DY47073_CATEGORY_LABELS), fill_value=0)
-    )
-    category_table = "\n".join(
-        f"| {DY47073_CATEGORY_LABELS[name]} | {int(category_counts[name]):,} |"
-        for name in DY47073_CATEGORY_LABELS
-    )
-    overview_table = "\n".join(
-        f"| {label} | {value:,} |"
-        for label, value in (
-            ("DY47073 蛋白记录", counts["dy47073_records"]),
-            ("有内部终止符的记录", counts["dy47073_internal_stop_records"]),
-            ("PomBase coding 基因中有 DY47073 记录", counts["dy47073_coding_genes_with_record"]),
-            ("DY47073 特有基因(PomBase 非 coding)", counts["dy47073_only_genes"]),
-            ("其中在 AFdb 中有结构", counts["dy47073_only_with_afdb"]),
-            ("AFdb-only 条目中与 DY47073 精确匹配", counts["afdb_only_dy47073_match"]),
-        )
-    )
-
-    pombase_matches = comparison.loc[comparison[DyCol.CATEGORY] == "dy_eq_pombase_ne_afdb"].assign(
-        abs_afdb_delta=lambda frame: (frame[AfdbCol.LENGTH] - frame["pombase_length"]).abs()
-    )
-    pombase_table = render_view(
-        pombase_matches,
-        [
-            GeneCol.SYSTEMATIC_ID,
-            GeneCol.GENE_NAME,
-            GeneCol.ACCESSION,
-            "pombase_length",
-            AfdbCol.LENGTH,
-            DyCol.LENGTH,
-            "abs_afdb_delta",
-        ],
-        ["gene", "name", "UniProt", "PomBase", "AFdb", "DY47073", "abs(AFdb-PomBase)"],
-        sort_column="abs_afdb_delta",
-        limit=15,
-    )
-    pombase_uniprot = int(
-        (pombase_matches["relationship"] == "pombase_matches_uniprot_afdb_differs").sum()
-    )
-    afdb_uniprot = int(
-        (pombase_matches["relationship"] == "afdb_matches_uniprot_pombase_differs").sum()
-    )
-
-    afdb_matches = comparison.loc[comparison[DyCol.CATEGORY] == "dy_eq_afdb_ne_pombase"]
-    afdb_table = render_view(
-        afdb_matches,
-        [
-            GeneCol.SYSTEMATIC_ID,
-            GeneCol.GENE_NAME,
-            GeneCol.ACCESSION,
-            "pombase_length",
-            AfdbCol.LENGTH,
-            DyCol.LENGTH,
-            "relationship",
-        ],
-        ["gene", "name", "UniProt", "PomBase", "AFdb", "DY47073", "UniProt 关系"],
-    )
-
-    differs = comparison.loc[comparison[DyCol.CATEGORY] == "dy_differs_from_both"].assign(
-        abs_dy_delta=lambda frame: (frame[DyCol.LENGTH] - frame["pombase_length"]).abs()
-    )
-    differs_table = render_view(
-        differs,
-        [
-            GeneCol.SYSTEMATIC_ID,
-            GeneCol.GENE_NAME,
-            GeneCol.ACCESSION,
-            "pombase_length",
-            AfdbCol.LENGTH,
-            DyCol.LENGTH,
-            DyCol.VS_POMBASE,
-            "abs_dy_delta",
-        ],
-        [
-            "gene",
-            "name",
-            "UniProt",
-            "PomBase",
-            "AFdb",
-            "DY47073",
-            "DY vs PomBase",
-            "abs(DY-PomBase)",
-        ],
-        sort_column="abs_dy_delta",
-        limit=15,
-    )
-    differs_afdb_identical = int(differs["relationship"].isna().sum())
-    differs_afdb_other = int(differs["relationship"].notna().sum())
-
-    no_afdb = comparison.loc[comparison[DyCol.CATEGORY] == "dy_differs_pombase_no_afdb"]
-    no_afdb_table = render_view(
-        no_afdb,
-        [
-            GeneCol.SYSTEMATIC_ID,
-            GeneCol.GENE_NAME,
-            GeneCol.ACCESSION,
-            "pombase_length",
-            DyCol.LENGTH,
-            DyCol.VS_POMBASE,
-        ],
-        ["gene", "name", "UniProt", "PomBase", "DY47073", "DY vs PomBase"],
-    )
-
-    absent = comparison.loc[comparison[DyCol.CATEGORY] == "absent_from_dy47073"]
-    absent_table = render_view(
-        absent,
-        [
-            GeneCol.SYSTEMATIC_ID,
-            GeneCol.GENE_NAME,
-            GeneCol.ACCESSION,
-            "pombase_length",
-            AfdbCol.LENGTH,
-        ],
-        ["gene", "name", "UniProt", "PomBase", "AFdb"],
-    )
-
-    only_table = render_view(
-        dy_result.only,
-        [
-            GeneCol.SYSTEMATIC_ID,
-            GeneCol.GENE_NAME,
-            GeneCol.PRODUCT,
-            GeneCol.GENE_TYPE,
-            DyCol.RECORD_IDS,
-            DyCol.LENGTH,
-            DyCol.INTERNAL_STOP,
-            DyCol.MATCHING_AFDB,
-        ],
-        [
-            "gene",
-            "name",
-            "product",
-            "PomBase 类型",
-            "DY records",
-            "DY 长度",
-            "内部终止符",
-            "匹配的 AFdb 条目",
-        ],
-        sort_column=DyCol.LENGTH,
-    )
-
-    matched = dy_result.afdb_only_matches.loc[
-        dy_result.afdb_only_matches[DyCol.CATEGORY] == "dy47073_sequence_match"
-    ]
-    matched_table = render_view(
-        matched,
-        [
-            AfdbCol.ACCESSION,
-            AfdbCol.DESCRIPTION,
-            AfdbCol.LENGTH,
-            DyCol.MATCHING_GENES,
-            DyCol.LENGTH,
-        ],
-        ["UniProt", "描述", "AFdb 长度", "DY47073 基因", "DY 长度"],
-        sort_column=AfdbCol.LENGTH,
-    )
-
-    if dy_result.secondary_matches.empty:
-        secondary_block = "未发现 DY47073 与 AFdb-only 次级条目的第三种序列版本。"
-    else:
-        secondary_table = render_view(
-            dy_result.secondary_matches,
-            [
-                DyCol.GENE,
-                DyCol.RECORD_ID,
-                DyCol.LENGTH,
-                AfdbCol.ACCESSION,
-                AfdbCol.LENGTH,
-                DyCol.VS_POMBASE,
-            ],
-            [
-                "gene",
-                "DY record",
-                "DY 长度",
-                "匹配的 AFdb-only 条目",
-                "AFdb 长度",
-                "DY vs PomBase",
-            ],
-            sort_column=DyCol.LENGTH,
-        )
-        secondary_block = f"""以下 DY47073 蛋白与一个非 primary 的 AFdb-only 条目精确匹配,
-且与 PomBase 不同,构成第三种序列版本:
-
-{secondary_table}"""
-
-    return f"""## 6. DY47073 三方比较
-
-数据:`{config.dy47073_fasta}`(release `{config.dy47073_label}`)。
-DY47073 序列按 FASTA 翻译序列读取,仅去掉末尾终止符;内部终止符保留并在表中标记。
-同一基因有多条记录时取最长序列作为代表,`dy47073_n_records` 记录条数。
-
-| 项目 | 数量 |
-|---|---:|
-{overview_table}
-
-| 三方关系 | 数量 |
-|---|---:|
-{category_table}
-
-- `identical`:DY47073 与 PomBase 精确一致;若该基因有 primary AFdb 结构,也与 AFdb 一致。
-- `dy_eq_pombase_ne_afdb`:DY47073 支持 PomBase,AFdb 序列不同(通常为旧序列)。
-- `dy_eq_afdb_ne_pombase`:DY47073 支持 AFdb,PomBase 序列不同。
-- `dy_differs_from_both`:DY47073 与 PomBase、AFdb 都不同。
-- `dy_differs_pombase_no_afdb`:DY47073 与 PomBase 不同,且没有 AFdb 结构。
-- `absent_from_dy47073`:PomBase 有该基因,DY47073 无对应蛋白。
-
-### 6.1 DY47073 == PomBase,AFdb 不同({counts["dy47073_pombase_matches_afdb_differs"]})
-
-这些基因支持 PomBase,AFdb 是旧序列或基因模型不同。
-其中 {pombase_uniprot:,} 个当前 UniProt 也等于 PomBase,
-{afdb_uniprot:,} 个当前 UniProt 等于 AFdb。
-按 abs(AFdb-PomBase) 长度差排序的前 15 个:
-
-{pombase_table}
-
-### 6.2 DY47073 == AFdb,PomBase 不同({counts["dy47073_afdb_matches_pombase_differs"]})
-
-{afdb_table}
-
-注意:这 {counts["dy47073_afdb_matches_pombase_differs"]:,} 个中只有部分表示"PomBase 更新";
-若当前 UniProt 等于 PomBase,则 DY47073 与 AFdb 保留的是旧序列。
-
-### 6.3 DY47073 与两者都不同({counts["dy47073_differs_from_both"]})
-
-- {differs_afdb_identical:,} 个 AFdb == PomBase,DY47073 是唯一差异(株特异或注释差异)。
-- {differs_afdb_other:,} 个 AFdb 与 PomBase 本来就不同,构成三方分歧。
-- 其中等长 {counts["dy47073_differs_same_length"]:,} 个、
-  长度不同 {counts["dy47073_differs_different_length"]:,} 个(相对 PomBase)。
-
-按 abs(DY-PomBase) 长度差排序的前 15 个:
-
-{differs_table}
-
-{secondary_block}
-
-### 6.4 DY47073 与 PomBase 不同且无 AFdb 结构({counts["dy47073_differs_from_pombase_no_afdb"]})
-
-{no_afdb_table}
-
-### 6.5 DY47073 缺少的 PomBase 基因({counts["dy47073_absent_from_pombase"]})
-
-{absent_table}
-
-### 6.6 DY47073 特有蛋白 / PomBase pseudogene({counts["dy47073_only_genes"]})
-
-这些 ID 在 PomBase 2026 中被标为 pseudogene(或不在基因表中),但 DY47073 有蛋白记录。
-其中 {counts["dy47073_only_with_afdb"]:,} 个能在 AFdb 中找到精确匹配的结构。
-
-{only_table}
-
-### 6.7 AFdb-only 条目与 DY47073
-
-{counts["afdb_only_no_match"]:,} 个无 PomBase 匹配的 AFdb-only 条目中,
-{counts["afdb_only_dy47073_match"]:,} 个与 DY47073 精确匹配;
-其余 {counts["afdb_only_no_dy47073_match"]:,} 个仍无匹配。
-
-{matched_table}
-"""
-
-
-def render_recommendations(
-    counts: dict[str, int],
-    dy_result: Dy47073Result | None,
-) -> str:
+def render_recommendations(counts: dict[str, int]) -> str:
     """Render downstream-use recommendations."""
     nonidentical = (
         counts["substitution_only_pairs"] + counts["indel_only_pairs"] + counts["both_pairs"]
     )
-    section_number = 7 if dy_result is not None else 6
-    dy_block = ""
-    if dy_result is not None:
-        dy_block = f"""6. **DY47073 三方比较**:
-   {counts["dy47073_pombase_matches_afdb_differs"]:,} 个基因 DY47073 == PomBase 但 AFdb 不同,
-   {counts["dy47073_afdb_matches_pombase_differs"]:,} 个 DY47073 == AFdb 但 PomBase 不同,
-   {counts["dy47073_differs_from_both"]:,} 个与两者都不同。
-   若下游以 DY47073 为参考,需按 `dy47073_category` 区分坐标体系;现有 vDulab2 自定义预测
-   基于旧 240322 注释,建议按本表更新。
-"""
-    return f"""## {section_number}. 对下游使用的建议
+    return f"""## 6. 对下游使用的建议
 
 1. **主分析集**:合并表共有 {counts["merged_shared_rows"]:,} 个 shared 行,其中
    {counts["shared_by_sequence_genes"]:,} 个按精确序列配对、{counts["shared_by_id_genes"]:,} 个
@@ -1969,7 +1232,7 @@ def render_recommendations(
    {counts["pae_accessions_without_afdb"]:,} 个。
 6. **TED/ECOD**:TED/ECOD 的坐标来自 AFdb v4。只有 AFdb v4 序列与所选结构序列完全一致时
    才纳入 TED/ECOD(当前 4,950 个基因);v4/v6 不一致的基因不做 TED/ECOD,避免坐标错位。
-{dy_block}"""
+"""
 
 
 def render_report(
@@ -1978,20 +1241,13 @@ def render_report(
     pombase_only: pd.DataFrame,
     counts: dict[str, int],
     config: Config,
-    dy_result: Dy47073Result | None = None,
 ) -> str:
     """Assemble the complete Markdown report."""
-    dy_header = ""
-    title = "# AFdb v6 与 PomBase 蛋白注释差异报告"
-    if dy_result is not None:
-        dy_header = f"DY47073 数据:`{config.dy47073_fasta}`(release `{config.dy47073_label}`)\n"
-        title = "# AFdb v6、PomBase 与 DY47073 蛋白注释差异报告"
-    header = f"""{title}
+    header = f"""# AFdb v6 与 PomBase 蛋白注释差异报告
 
 生成日期:{date.today().isoformat()}
 AFdb 数据:`{config.afdb_source}`
 PomBase 数据:`{config.pombase_dir}`(release `{config.pombase_release}`)
-{dy_header}
 """
     sections = [
         render_set_overview(counts, config),
@@ -2000,9 +1256,7 @@ PomBase 数据:`{config.pombase_dir}`(release `{config.pombase_release}`)
         render_afdb_only_section(afdb_only, counts),
         render_pombase_only_section(pombase_only, counts),
     ]
-    if dy_result is not None:
-        sections.append(render_dy47073_section(dy_result, counts, config))
-    sections.append(render_recommendations(counts, dy_result))
+    sections.append(render_recommendations(counts))
     return header + "\n".join(sections)
 
 
@@ -2024,17 +1278,6 @@ def parse_args() -> argparse.Namespace:
         "--pombase-release",
         default="2026-11-01",
         help="PomBase release label written to the report.",
-    )
-    parser.add_argument(
-        "--dy47073-fasta",
-        type=Path,
-        default=None,
-        help="Optional DY47073 protein FASTA for the three-way comparison.",
-    )
-    parser.add_argument(
-        "--dy47073-label",
-        default="240717",
-        help="DY47073 release label written to the report.",
     )
     parser.add_argument(
         "--uniprot-resolution",
@@ -2063,8 +1306,6 @@ def build_config(args: argparse.Namespace) -> Config:
         uniprot_triangulation=(
             args.uniprot_triangulation.resolve() if args.uniprot_triangulation else None
         ),
-        dy47073_fasta=(args.dy47073_fasta.resolve() if args.dy47073_fasta else None),
-        dy47073_label=args.dy47073_label,
     )
 
 
@@ -2077,7 +1318,6 @@ def write_tables(
     afdb_only: pd.DataFrame,
     pombase_only: pd.DataFrame,
     counts: dict[str, int],
-    dy_result: Dy47073Result | None = None,
 ) -> None:
     """Write all tabular outputs."""
     config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -2092,17 +1332,6 @@ def write_tables(
     afdb_entry_table.to_csv(config.output_dir / "02_afdb_entry_roles.tsv", sep="\t", index=False)
     afdb_only.to_csv(config.output_dir / "06_afdb_only.tsv", sep="\t", index=False)
     pombase_only.to_csv(config.output_dir / "07_pombase_only.tsv", sep="\t", index=False)
-    if dy_result is not None:
-        comparison_columns = [*DY47073_COMPARISON_COLUMNS, DyCol.SEQUENCE.value]
-        dy_result.comparison.loc[:, comparison_columns].to_csv(
-            config.output_dir / "dy47073_comparison.tsv", sep="\t", index=False
-        )
-        dy_result.only.loc[:, DY47073_ONLY_COLUMNS].to_csv(
-            config.output_dir / "dy47073_only.tsv", sep="\t", index=False
-        )
-        dy_result.afdb_only_matches.loc[:, AFDB_ONLY_DY_COLUMNS].to_csv(
-            config.output_dir / "afdb_only_dy47073.tsv", sep="\t", index=False
-        )
     pd.DataFrame({"metric": list(counts), "value": list(counts.values())}).to_csv(
         config.output_dir / "08_summary_counts.tsv", sep="\t", index=False
     )
@@ -2117,7 +1346,6 @@ def write_excel(
     afdb_entry_table: pd.DataFrame,
     afdb_only: pd.DataFrame,
     pombase_only: pd.DataFrame,
-    dy_result: Dy47073Result | None = None,
 ) -> None:
     """Write the multi-sheet Excel workbook."""
     summary = pd.DataFrame({"metric": list(counts), "value": list(counts.values())})
@@ -2166,65 +1394,7 @@ def write_excel(
 
         pombase_only.to_excel(writer, sheet_name="pombase_only_all", index=False)
 
-        if dy_result is not None:
-            dy_comparison = dy_result.comparison.loc[:, DY47073_COMPARISON_COLUMNS]
-            dy_comparison.to_excel(writer, sheet_name="dy47073_comparison", index=False)
-            dy_comparison.loc[dy_comparison[DyCol.CATEGORY] != "identical"].to_excel(
-                writer, sheet_name="dy47073_differences", index=False
-            )
-            dy_result.only.loc[:, DY47073_ONLY_COLUMNS].to_excel(
-                writer, sheet_name="dy47073_only", index=False
-            )
-            dy_result.afdb_only_matches.loc[:, AFDB_ONLY_DY_COLUMNS].to_excel(
-                writer, sheet_name="afdb_only_dy47073", index=False
-            )
-            if not dy_result.secondary_matches.empty:
-                secondary_columns = [
-                    DyCol.GENE,
-                    DyCol.RECORD_ID,
-                    DyCol.LENGTH,
-                    AfdbCol.ACCESSION,
-                    AfdbCol.LENGTH,
-                    DyCol.VS_POMBASE,
-                ]
-                dy_result.secondary_matches.loc[:, secondary_columns].to_excel(
-                    writer, sheet_name="dy47073_secondary", index=False
-                )
-
     logger.info(f"Excel workbook written to {workbook_path}")
-
-
-def build_dy47073_result(
-    dy47073_fasta: Path,
-    gene_catalog: pd.DataFrame,
-    pombase_genes: pd.DataFrame,
-    pombase_peptides: pd.DataFrame,
-    shared_comparison: pd.DataFrame,
-    afdb_only: pd.DataFrame,
-) -> Dy47073Result:
-    """Build the DY47073 comparison tables from validated inputs."""
-    proteins = load_dy47073_proteins(dy47073_fasta, gene_catalog)
-    afdb_sequences = build_afdb_sequence_table(shared_comparison)
-    genes = build_dy47073_gene_table(proteins, pombase_peptides, afdb_sequences)
-    comparison = build_dy47073_comparison(pombase_genes, pombase_peptides, afdb_sequences, genes)
-    has_triangulation = "relationship" in shared_comparison.columns
-    comparison = (
-        comparison.merge(
-            shared_comparison.loc[:, [GeneCol.SYSTEMATIC_ID, "relationship"]],
-            on=GeneCol.SYSTEMATIC_ID,
-            how="left",
-        )
-        if has_triangulation
-        else comparison.assign(relationship=np.nan)
-    )
-    return Dy47073Result(
-        comparison=comparison,
-        only=build_dy47073_only_table(genes, proteins, gene_catalog, afdb_only),
-        afdb_only_matches=annotate_afdb_only_with_dy47073(afdb_only, proteins),
-        secondary_matches=build_dy47073_secondary_matches(proteins, afdb_only, comparison),
-        record_count=len(proteins),
-        internal_stop_count=int(proteins[DyCol.INTERNAL_STOP].sum()),
-    )
 
 
 def main() -> int:
@@ -2286,19 +1456,6 @@ def main() -> int:
             afdb_entries, pae_accessions, shared_comparison, afdb_only
         )
 
-        dy_result = None
-        if config.dy47073_fasta is not None:
-            dy_result = build_dy47073_result(
-                config.dy47073_fasta,
-                gene_catalog,
-                pombase_genes,
-                pombase_peptides,
-                shared_comparison,
-                afdb_only,
-            )
-            merged = attach_dy47073_to_merged(merged, dy_result)
-            counts.update(dy47073_counts(dy_result))
-
         write_tables(
             config,
             shared_comparison,
@@ -2308,7 +1465,6 @@ def main() -> int:
             afdb_only,
             pombase_only,
             counts,
-            dy_result,
         )
         write_excel(
             config,
@@ -2319,11 +1475,8 @@ def main() -> int:
             afdb_entry_table,
             afdb_only,
             pombase_only,
-            dy_result,
         )
-        report = render_report(
-            shared_comparison, afdb_only, pombase_only, counts, config, dy_result
-        )
+        report = render_report(shared_comparison, afdb_only, pombase_only, counts, config)
         (config.output_dir / "09_report.md").write_text(report, encoding="utf-8")
     except (OSError, ValueError, KeyError) as error:
         logger.exception(f"Fatal execution error: {error}")
