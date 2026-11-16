@@ -92,7 +92,7 @@ Every step below reads the registry (#4) and feeds the next step.
 Producer: **R8** `registry_pae_to_domains` → **S1** → **S3** → **S6** `src/pae.py`
 → `results/05_domains/`
 
-5,120 `.domain` files, one per analysed gene.
+5,119 `.domain` files, one per analysed gene.
 
 ### 6. PAE domain table
 

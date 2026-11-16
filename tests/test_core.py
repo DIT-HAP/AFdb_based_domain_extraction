@@ -8,7 +8,7 @@ from src.dna import organize_domains
 from src.pae import domain_file_to_runs, parse_domain_filename
 from src.plddt import check_overlap, domain_stats, merge_intervals, parse_structure_id
 from src.segments import assign_type
-from src.unify import expand_intervals
+from src.unify import attach_pombase_annotation, expand_intervals
 
 
 def test_merge_intervals_adjacent() -> None:
@@ -62,6 +62,29 @@ def test_expand_intervals() -> None:
     assert expanded["end"].tolist() == [5, 12]
     assert expanded["length"].tolist() == [5, 3]
     assert expanded["segment_part"].tolist() == [1, 2]
+
+
+def test_attach_pombase_annotation_fills_blank_gene_name() -> None:
+    frame = pd.DataFrame(
+        {
+            "uniprot_id": ["P1", "P2"],
+            "systematic_id": [pd.NA, pd.NA],
+            "gene_name": [pd.NA, pd.NA],
+            "protein_length": [100.0, np.nan],
+        }
+    )
+    genes = pd.DataFrame(
+        {
+            "uniprot_id": ["P1", "P2"],
+            "gene_systematic_id": ["SPAC1.01", "SPAC2.02"],
+            "gene_name": ["abc", ""],
+        }
+    )
+    stats = pd.DataFrame({"Systematic_ID": ["SPAC1.01", "SPAC2.02"], "Residues": [100, 200]})
+
+    result = attach_pombase_annotation(frame, genes, stats)
+
+    assert result["gene_name"].tolist() == ["abc", "SPAC2.02"]
 
 
 def test_assign_type() -> None:

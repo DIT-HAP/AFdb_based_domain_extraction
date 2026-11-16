@@ -172,7 +172,7 @@ def attach_pombase_annotation(
     genes: pd.DataFrame,
     stats: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Fill systematic ids, gene names, and protein lengths from PomBase."""
+    """Fill ids, gene names, and protein lengths from PomBase, falling back to the systematic id."""
     gene_map = genes[["uniprot_id", "gene_systematic_id", "gene_name"]].drop_duplicates(
         "uniprot_id"
     )
@@ -184,6 +184,8 @@ def attach_pombase_annotation(
     result = frame.merge(gene_map, on="uniprot_id", how="left", suffixes=("", "_pombase"))
     result["systematic_id"] = result["systematic_id"].combine_first(result["gene_systematic_id"])
     result["gene_name"] = result["gene_name"].combine_first(result["gene_name_pombase"])
+    blank_name = result["gene_name"].fillna("").eq("")
+    result["gene_name"] = result["gene_name"].mask(blank_name, result["systematic_id"])
     result["protein_length"] = result["protein_length"].combine_first(result["pombase_length"])
     result = result.drop(columns=["gene_systematic_id", "gene_name_pombase", "pombase_length"])
     result["protein_length"] = result["protein_length"].astype("Int64")
