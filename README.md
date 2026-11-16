@@ -11,10 +11,10 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
 
 - `results/01_afdb/03_afdb_entries.tsv` — one row per AFdb v6 entry with the
   modelled sequence, description, CIF filename, and PAE availability.
-- `results/04_gene_structure_registry.tsv` — one row per PomBase coding
+- `results/04_registry/01_gene_structure_registry.tsv` — one row per PomBase coding
   gene (plus the AFdb-only entries), recording the selected structure, PAE
   matrix, modelled sequence, coordinate basis, and analysis flag.
-- `results/11_segments.tsv` — the canonical unified segment table with
+- `results/10_segments.tsv` — the canonical unified segment table with
   three sources: `PAE`, `TED`, `ECOD`.
 - `results/03_comparison/` — the detailed AFdb-vs-PomBase tables, report,
   and Excel workbook.
@@ -111,7 +111,7 @@ PomBase 2026-06-01 + UniProt snapshots ─────────────�
                                               compare-afdb-pombase ──> comparison tables
                                                               │
                                                               v
-                            build-registry ──> results/04_gene_structure_registry.tsv
+                            build-registry ──> results/04_registry/01_gene_structure_registry.tsv
                                                               │
         ┌─────────────────────────────────────────────────────┴─────┐
         v                                                           v
@@ -120,7 +120,7 @@ registry-extract-plddt ───────────────────
         └────────────── registry-merge-domains ────────────────────┘
                                       │
                                       v
-                    registry-unify-segments ──> results/11_segments.tsv
+                    registry-unify-segments ──> results/10_segments.tsv
 ```
 
 The two UniProt snapshots are pinned resources. `02_uniprot.smk` provides

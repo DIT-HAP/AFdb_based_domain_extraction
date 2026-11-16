@@ -1216,7 +1216,8 @@ def render_recommendations(counts: dict[str, int]) -> str:
 
 1. **主分析集**:合并表共有 {counts["merged_shared_rows"]:,} 个 shared 行,其中
    {counts["shared_by_sequence_genes"]:,} 个按精确序列配对、{counts["shared_by_id_genes"]:,} 个
-   按 UniProt ID 回退。下游以 `results/04_gene_structure_registry.tsv` 的 `in_analysis` 为准。
+   按 UniProt ID 回退。下游以
+   `results/04_registry/01_gene_structure_registry.tsv` 的 `in_analysis` 为准。
 2. **序列替换条目**:{counts["sequence_rescued_genes"]:,} 个基因使用的 AFdb 条目不是其
    UniProt accession 对应的条目;其中 {counts["afdb_only_superseded"]:,} 个原条目序列与
    PomBase 不同,已列入第 4 节。注册表对这些基因使用序列精确一致的替代条目。

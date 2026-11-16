@@ -15,8 +15,9 @@ Input
 
 Output
 ------
-- ``results/01_afdb/03_afdb_entries.tsv``, ``results/04_gene_structure_registry.tsv``,
-  and ``results/11_segments.tsv``.
+- ``results/01_afdb/03_afdb_entries.tsv``,
+  ``results/04_registry/01_gene_structure_registry.tsv``, and
+  ``results/10_segments.tsv``.
 
 Usage
 -----
@@ -76,14 +77,15 @@ UNIPROT_RESOLUTION = resolve(config["resources"]["uniprot"]["resolution"])
 AFDB_RESULTS = f"{RESULTS}/01_afdb"
 UNIPROT_RESULTS = f"{RESULTS}/02_uniprot"
 COMPARISON = f"{RESULTS}/03_comparison"
-REGISTRY_TABLE = f"{RESULTS}/04_gene_structure_registry.tsv"
-REGISTRY_SUMMARY = f"{RESULTS}/05_registry_summary.tsv"
-PAE_DOMAINS = f"{RESULTS}/06_domains"
-PAE_TABLE = f"{RESULTS}/07_PAE_domain.tsv"
-PLDDT_TABLE = f"{RESULTS}/08_pLDDT_scores.tsv"
-REFORMATED_TABLE = f"{RESULTS}/09_reformated_PAE_domain.tsv"
-ANNOTATED_TABLE = f"{RESULTS}/10_annotated_PAE_domain.tsv"
-SEGMENTS_TABLE = f"{RESULTS}/11_segments.tsv"
+REGISTRY_RESULTS = f"{RESULTS}/04_registry"
+REGISTRY_TABLE = f"{REGISTRY_RESULTS}/01_gene_structure_registry.tsv"
+REGISTRY_SUMMARY = f"{REGISTRY_RESULTS}/02_registry_summary.tsv"
+PAE_DOMAINS = f"{RESULTS}/05_domains"
+PAE_TABLE = f"{RESULTS}/06_PAE_domain.tsv"
+PLDDT_TABLE = f"{RESULTS}/07_pLDDT_scores.tsv"
+REFORMATED_TABLE = f"{RESULTS}/08_reformated_PAE_domain.tsv"
+ANNOTATED_TABLE = f"{RESULTS}/09_annotated_PAE_domain.tsv"
+SEGMENTS_TABLE = f"{RESULTS}/10_segments.tsv"
 
 CURATED_VERSION = "registry_2026-06-01"
 

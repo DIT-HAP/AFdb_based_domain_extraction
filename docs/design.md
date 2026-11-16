@@ -151,7 +151,8 @@ from `results/01_afdb/03_afdb_entries.tsv`: all seven comparison TSVs, the
 entry-role table, the registry, and the summary are byte-identical to the
 pre-split outputs; the Excel workbook has the same 15 sheets with identical
 values. The Markdown report differs only in the corrected registry path
-reference (`04_gene_structure_registry.tsv`). The PAE clustering/downstream
+reference (`04_gene_structure_registry.tsv`, now
+`04_registry/01_gene_structure_registry.tsv`). The PAE clustering/downstream
 chain was not rerun for this check.
 
 The two refresh rules were also run end to end. Their candidates reproduce the
