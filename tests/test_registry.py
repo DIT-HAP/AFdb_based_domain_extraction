@@ -9,9 +9,9 @@ from src.registry import (
     AFDB_SEQUENCE_MATCH,
     VDULAB_SOURCE,
     _attach_structure,
-    _match_af3,
-    _match_vdulab,
+    _match_prediction,
     _selection_reason,
+    build_registry_stats,
 )
 
 
@@ -22,7 +22,6 @@ def _merged() -> pd.DataFrame:
             "gene_systematic_id": ["geneA", "geneB"],
             "uniprot_id": ["A", "B"],
             "afdb_accession": ["A", "B"],
-            "afdb_entry_id": ["A", "B"],
             "category": ["shared", "shared"],
             "match_method": ["uniprot_id", "uniprot_id"],
             "sequence_category": ["identical", "indel_only"],
@@ -40,6 +39,7 @@ def _merged() -> pd.DataFrame:
             "gene_product": ["pa", "pb"],
             "gene_type": ["protein coding gene", "protein coding gene"],
             "afdb_description": ["da", "db"],
+            "afdb_sequence": ["AAA", "CCC"],
             "pombase_accession": ["A", "B"],
         }
     )
@@ -49,7 +49,7 @@ def _merged_alternate() -> pd.DataFrame:
     """Build a frame where geneB is paired to a sequence-identical alternate entry."""
     return _merged().assign(
         afdb_accession=["A", "B_alt"],
-        afdb_entry_id=["A", "B_alt"],
+        afdb_sequence=["AAA", "CCC"],
         match_method=["sequence", "sequence"],
         sequence_category=["identical", "identical"],
         afdb_length=[3, 3],
@@ -63,7 +63,7 @@ def _merged_alternate() -> pd.DataFrame:
 
 def test_match_vdulab_requires_sequence_equality() -> None:
     merged = _merged()
-    matched = _match_vdulab(merged, ["A", "B"], {"geneA": "AAA", "geneB": "TTT"})
+    matched = _match_prediction(merged, ["A", "B"], {"geneA": "AAA", "geneB": "TTT"})
     assert matched.to_dict("records") == [
         {"gene_systematic_id": "geneA", "structure_id": "A", "structure_sequence": "AAA"}
     ]
@@ -71,7 +71,7 @@ def test_match_vdulab_requires_sequence_equality() -> None:
 
 def test_match_af3_requires_sequence_equality() -> None:
     merged = _merged()
-    matched = _match_af3(merged, ["B"], {"B": "CCC"})
+    matched = _match_prediction(merged, ["B"], {"B": "CCC"}, sequence_key="uniprot_id")
     assert matched.to_dict("records") == [
         {"gene_systematic_id": "geneB", "structure_id": "B", "structure_sequence": "CCC"}
     ]
@@ -93,7 +93,6 @@ def test_attach_structure_marks_missing_accession_as_sequence_match() -> None:
         registry,
         empty,
         empty,
-        entry_sequences={"A": "AAA", "B_alt": "CCC"},
         v4_sequences={},
     )
     source = result.set_index("gene_systematic_id")["structure_source"]
@@ -123,7 +122,6 @@ def test_attach_structure_assigns_source_and_paths() -> None:
         registry,
         vdulab,
         af3,
-        entry_sequences={"A": "AAA", "B_alt": "CCC"},
         v4_sequences={"A": "AAA", "B": "CCD"},
     )
     source = result.set_index("gene_systematic_id")["structure_source"]
@@ -134,6 +132,40 @@ def test_attach_structure_assigns_source_and_paths() -> None:
         "geneB": False,
     }
     assert result.set_index("gene_systematic_id")["modeled_length"].loc["geneB"] == 3
+
+
+def test_build_registry_stats_counts_downstream_sources() -> None:
+    registry = pd.DataFrame(
+        {
+            "in_analysis": [True, True, True, False],
+            "structure_source": [VDULAB_SOURCE, AF3_SOURCE, VDULAB_SOURCE, "none"],
+            "sequence_category": [
+                "substitution_only",
+                "not_compared",
+                "not_compared",
+                "not_compared",
+            ],
+            "category": ["shared", "shared", "pombase_only", "afdb_only"],
+            "selection_reason": [
+                VDULAB_SOURCE,
+                AF3_SOURCE,
+                VDULAB_SOURCE,
+                "excluded_prediction_sequence_mismatch",
+            ],
+            "ted_ecod_coordinate_ok": [True, False, True, False],
+        }
+    )
+    stats = build_registry_stats(registry).set_index("metric")["value"].to_dict()
+    assert stats == {
+        "in_analysis": 3,
+        "nonidentical_shared": 1,
+        "vdulab_total": 2,
+        "vdulab_nonidentical": 1,
+        "vdulab_long": 1,
+        "af3_total": 1,
+        "excluded_prediction_sequence_mismatch": 1,
+        "ted_ecod_coordinate_ok": 2,
+    }
 
 
 def test_load_gene_table_accepts_external_id(tmp_path) -> None:

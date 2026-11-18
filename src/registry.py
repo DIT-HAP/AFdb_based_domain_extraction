@@ -20,16 +20,15 @@ Selection rules, in priority order:
 
 Input
 -----
-- Comparison merged table from the sequence-first AFdb/PomBase stage.
-- AFdb v6 entry inventory (accession -> modelled sequence).
-- PomBase 2026-06-01 peptide FASTA and gene table.
+- Comparison merged table with the selected entries, both sequences, and the
+  UniProt relationship column.
 - AFdb v4 CIF files, vDulab structures/PAE, AF3 structures/PAE.
-- UniProt triangulation snapshot for the ``relationship`` column.
 
 Output
 ------
 - ``gene_structure_registry.tsv`` with one row per PomBase coding gene plus
-  the AFdb-only entries, and ``registry_summary.tsv`` with selection counts.
+  the AFdb-only entries, ``registry_summary.tsv`` with selection counts, and
+  ``registry_stats.tsv`` with downstream counts.
 """
 
 # =============================================================================
@@ -41,7 +40,6 @@ from pathlib import Path
 import re
 from typing import TextIO
 
-from Bio import SeqIO
 from Bio.Data.PDBData import protein_letters_3to1
 from Bio.PDB.MMCIFParser import MMCIFParser
 from loguru import logger
@@ -61,6 +59,7 @@ AFDB_ALTERNATE = "AFDB_v6_alternate"
 VDULAB_SOURCE = "vDulab"
 AF3_SOURCE = "AF3"
 NO_SOURCE = "none"
+NONIDENTICAL_CATEGORIES = ("substitution_only", "indel_only", "both")
 EXCLUSION_REASONS = {
     "afdb_only_not_analysed",
     "excluded_partial_structure",
@@ -89,10 +88,13 @@ MERGED_REQUIRED = [
     "gene_product",
     "gene_type",
     "afdb_description",
+    "afdb_sequence",
     "afdb_length",
     "pombase_length",
+    "pombase_sequence",
     "length_delta",
     "sequence_category",
+    "relationship",
     "n_substitutions",
     "n_afdb_extra",
     "n_pombase_extra",
@@ -100,8 +102,6 @@ MERGED_REQUIRED = [
     "duplicate_afdb_accessions",
     "notes",
 ]
-INVENTORY_REQUIRED = ["afdb_accession", "afdb_sequence"]
-TRIANGULATION_REQUIRED = ["gene_systematic_id", "relationship"]
 
 REGISTRY_COLUMNS = [
     "gene_systematic_id",
@@ -150,15 +150,13 @@ class RegistryPaths:
     """Immutable paths and release labels for a registry build."""
 
     merged_table: Path
-    afdb_inventory: Path
-    uniprot_triangulation: Path
-    pombase_peptide: Path
     afdb_v4_dir: Path
     vdulab_structure_dir: Path
     vdulab_fasta_dir: Path
     af3_structure_dir: Path
     output: Path
     summary_output: Path
+    stats_output: Path
 
 
 # =============================================================================
@@ -204,15 +202,6 @@ def load_cif_sequences(directory: Path) -> dict[str, str]:
     return sequences
 
 
-def load_peptides(path: Path) -> dict[str, str]:
-    """Map PomBase systematic gene ids to first-stop-truncated peptides."""
-    with open_text(path) as handle:
-        records = list(SeqIO.parse(handle, "fasta"))
-    genes = [record.id.split(":pep")[0].rsplit(".", 1)[0] for record in records]
-    sequences = [str(record.seq).rstrip("*") for record in records]
-    return dict(zip(genes, sequences, strict=True))
-
-
 def load_gene_fastas(directory: Path) -> dict[str, str]:
     """Map gene ids to the single sequence of their prediction FASTA."""
     sequences: dict[str, str] = {}
@@ -235,39 +224,26 @@ def load_structure_ids(directory: Path, suffix: str, model_tag: str) -> list[str
 # =============================================================================
 # 5. FUNCTIONAL CORE
 # =============================================================================
-def _match_vdulab(
+def _match_prediction(
     merged: pd.DataFrame,
     stems: list[str],
-    fasta_sequences: dict[str, str],
+    prediction_sequences: dict[str, str],
+    *,
+    sequence_key: str = "gene_systematic_id",
 ) -> pd.DataFrame:
-    """Return genes whose vDulab input sequence equals the PomBase peptide."""
-    available = merged[["gene_systematic_id", "uniprot_id", "pombase_sequence"]].copy()
-    available["vDulab_id"] = available["uniprot_id"].where(available["uniprot_id"].isin(stems))
-    available["vdulab_sequence"] = available["gene_systematic_id"].map(fasta_sequences)
-    matched = available.loc[
-        available["vDulab_id"].notna()
-        & (available["pombase_sequence"] == available["vdulab_sequence"]),
-        ["gene_systematic_id", "vDulab_id", "vdulab_sequence"],
-    ]
-    return matched.rename(
-        columns={"vDulab_id": "structure_id", "vdulab_sequence": "structure_sequence"}
-    )
+    """Return genes whose prediction sequence equals the PomBase peptide.
 
-
-def _match_af3(
-    merged: pd.DataFrame,
-    stems: list[str],
-    structure_sequences: dict[str, str],
-) -> pd.DataFrame:
-    """Return genes whose AF3 modelled sequence equals the PomBase peptide."""
+    ``sequence_key`` is the gene id for vDulab FASTAs and the UniProt accession
+    for AF3 outputs.
+    """
     available = merged[["gene_systematic_id", "uniprot_id", "pombase_sequence"]].copy()
-    available["AF3_id"] = available["uniprot_id"].where(available["uniprot_id"].isin(stems))
-    available["af3_sequence"] = available["AF3_id"].map(structure_sequences)
-    matched = available.loc[
-        available["AF3_id"].notna() & (available["pombase_sequence"] == available["af3_sequence"]),
-        ["gene_systematic_id", "AF3_id", "af3_sequence"],
+    available["structure_id"] = available["uniprot_id"].where(available["uniprot_id"].isin(stems))
+    available["structure_sequence"] = available[sequence_key].map(prediction_sequences)
+    return available.loc[
+        available["structure_id"].notna()
+        & (available["pombase_sequence"] == available["structure_sequence"]),
+        ["gene_systematic_id", "structure_id", "structure_sequence"],
     ]
-    return matched.rename(columns={"AF3_id": "structure_id", "af3_sequence": "structure_sequence"})
 
 
 def _selection_reason(
@@ -278,7 +254,7 @@ def _selection_reason(
     """Assign one selection reason per row with named boolean masks."""
     is_afdb_only = merged["category"] == "afdb_only"
     is_identical = merged["sequence_category"] == "identical"
-    is_primary = is_identical & merged["afdb_entry_id"].eq(merged["uniprot_id"])
+    is_primary = is_identical & merged["afdb_accession"].eq(merged["uniprot_id"])
     is_alternate = is_identical & ~is_primary
     has_vdulab = merged["gene_systematic_id"].isin(vdulab["gene_systematic_id"])
     has_af3 = merged["gene_systematic_id"].isin(af3["gene_systematic_id"])
@@ -313,7 +289,6 @@ def _attach_structure(
     registry: pd.DataFrame,
     vdulab: pd.DataFrame,
     af3: pd.DataFrame,
-    entry_sequences: dict[str, str],
     v4_sequences: dict[str, str],
 ) -> pd.DataFrame:
     """Attach the selected structure id and modelled sequence to every row."""
@@ -321,8 +296,8 @@ def _attach_structure(
     afdb_sources = pd.DataFrame(
         {
             "gene_systematic_id": registry["gene_systematic_id"],
-            "structure_id": registry["afdb_entry_id"],
-            "structure_sequence": registry["afdb_entry_id"].map(entry_sequences),
+            "structure_id": registry["afdb_accession"],
+            "structure_sequence": registry["afdb_sequence"],
         }
     )
     afdb_sources = afdb_sources.loc[is_identical & afdb_sources["structure_id"].notna()]
@@ -404,6 +379,34 @@ def _attach_paths(registry: pd.DataFrame) -> pd.DataFrame:
     return registry
 
 
+def build_registry_stats(registry: pd.DataFrame) -> pd.DataFrame:
+    """Summarise the registry-derived downstream counts."""
+    in_analysis = registry["in_analysis"]
+    source = registry["structure_source"]
+    is_nonidentical = registry["sequence_category"].isin(NONIDENTICAL_CATEGORIES)
+    metrics = {
+        "in_analysis": int(in_analysis.sum()),
+        "nonidentical_shared": int((is_nonidentical & registry["category"].eq("shared")).sum()),
+        "vdulab_total": int((source.eq(VDULAB_SOURCE) & in_analysis).sum()),
+        "vdulab_nonidentical": int(
+            (source.eq(VDULAB_SOURCE) & in_analysis & is_nonidentical).sum()
+        ),
+        "vdulab_long": int(
+            (
+                source.eq(VDULAB_SOURCE)
+                & in_analysis
+                & registry["sequence_category"].eq("not_compared")
+            ).sum()
+        ),
+        "af3_total": int((source.eq(AF3_SOURCE) & in_analysis).sum()),
+        "excluded_prediction_sequence_mismatch": int(
+            registry["selection_reason"].eq("excluded_prediction_sequence_mismatch").sum()
+        ),
+        "ted_ecod_coordinate_ok": int((in_analysis & registry["ted_ecod_coordinate_ok"]).sum()),
+    }
+    return pd.DataFrame({"metric": list(metrics), "value": list(metrics.values())})
+
+
 # =============================================================================
 # 6. IMPERATIVE SHELL
 # =============================================================================
@@ -424,35 +427,21 @@ def _validate_selection(registry: pd.DataFrame, app_config: AppConfig) -> None:
 
 
 def build_registry(config: RegistryPaths, app_config: AppConfig) -> None:
-    """Build and write the gene structure registry and its summary."""
-    merged = read_tsv(config.merged_table)
-    inventory = read_tsv(config.afdb_inventory)
-    triangulation = read_tsv(config.uniprot_triangulation)
-    require_columns(merged, MERGED_REQUIRED, config.merged_table)
-    require_columns(inventory, INVENTORY_REQUIRED, config.afdb_inventory)
-    require_columns(triangulation, TRIANGULATION_REQUIRED, config.uniprot_triangulation)
+    """Build and write the gene structure registry, summary, and stats."""
+    registry = read_tsv(config.merged_table)
+    require_columns(registry, MERGED_REQUIRED, config.merged_table)
 
-    peptides = load_peptides(config.pombase_peptide)
-    entry_sequences = inventory.set_index("afdb_accession")["afdb_sequence"].to_dict()
     v4_sequences = load_cif_sequences(config.afdb_v4_dir)
     af3_sequences = load_cif_sequences(config.af3_structure_dir)
     vdulab_sequences = load_gene_fastas(config.vdulab_fasta_dir)
     vdulab_stems = load_structure_ids(config.vdulab_structure_dir, "pdb.gz", VDULAB_SOURCE)
     af3_stems = load_structure_ids(config.af3_structure_dir, "cif", "vAF3")
 
-    registry = merged.assign(
-        afdb_entry_id=lambda frame: frame["afdb_accession"].str.split(";").str[0],
-        pombase_sequence=lambda frame: frame["gene_systematic_id"].map(peptides),
-    )
-    registry["afdb_sequence"] = registry["afdb_entry_id"].map(entry_sequences)
-    relationship = triangulation.set_index("gene_systematic_id")["relationship"]
-    registry["relationship"] = registry["gene_systematic_id"].map(relationship)
-
-    vdulab = _match_vdulab(registry, vdulab_stems, vdulab_sequences)
-    af3 = _match_af3(registry, af3_stems, af3_sequences)
+    vdulab = _match_prediction(registry, vdulab_stems, vdulab_sequences)
+    af3 = _match_prediction(registry, af3_stems, af3_sequences, sequence_key="uniprot_id")
 
     registry["selection_reason"] = _selection_reason(registry, vdulab, af3)
-    registry = _attach_structure(registry, vdulab, af3, entry_sequences, v4_sequences)
+    registry = _attach_structure(registry, vdulab, af3, v4_sequences)
     registry = _attach_paths(registry)
     _validate_selection(registry, app_config)
 
@@ -466,6 +455,7 @@ def build_registry(config: RegistryPaths, app_config: AppConfig) -> None:
         .sort_values("count", ascending=False, ignore_index=True)
     )
     write_tsv(summary, config.summary_output)
+    write_tsv(build_registry_stats(output), config.stats_output)
     logger.info(
         f"Registry written to {config.output}: {int(output['in_analysis'].sum()):,} "
         f"of {len(output):,} rows in analysis"

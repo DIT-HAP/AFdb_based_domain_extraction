@@ -14,6 +14,8 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
 - `results/04_registry/01_gene_structure_registry.tsv` — one row per PomBase coding
   gene (plus the AFdb-only entries), recording the selected structure, PAE
   matrix, modelled sequence, coordinate basis, and analysis flag.
+- `results/04_registry/03_registry_stats.tsv` — downstream counts derived from
+  the registry (vDulab, AF3, and TED/ECOD coverage).
 - `results/10_segments.tsv` — the canonical unified segment table with
   three sources: `PAE`, `TED`, `ECOD`.
 - `results/03_comparison/` — the detailed AFdb-vs-PomBase tables, report,

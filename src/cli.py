@@ -210,29 +210,25 @@ def refresh_uniprot_resolution(
 @app.command("build-registry")
 def build_registry_command(
     merged_table: Path = typer.Option(..., help="Comparison merged table."),
-    afdb_inventory: Path = typer.Option(..., help="AFdb entry inventory with sequences."),
-    uniprot_triangulation: Path = typer.Option(..., help="UniProt triangulation snapshot."),
-    pombase_peptide: Path = typer.Option(..., help="PomBase peptide FASTA."),
     afdb_v4_dir: Path = typer.Option(..., help="AFdb v4 CIF directory for TED/ECOD coordinates."),
     vdulab_structure_dir: Path = typer.Option(..., help="vDulab structure directory."),
     vdulab_fasta_dir: Path = typer.Option(..., help="vDulab input FASTA directory."),
     af3_structure_dir: Path = typer.Option(..., help="AF3 structure directory."),
     output: Path = typer.Option(..., help="Registry output table."),
     summary_output: Path = typer.Option(..., help="Selection summary output table."),
+    stats_output: Path = typer.Option(..., help="Downstream statistics output table."),
     config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
 ) -> None:
     """Build the per-gene structure registry."""
     paths = RegistryPaths(
         merged_table=merged_table,
-        afdb_inventory=afdb_inventory,
-        uniprot_triangulation=uniprot_triangulation,
-        pombase_peptide=pombase_peptide,
         afdb_v4_dir=afdb_v4_dir,
         vdulab_structure_dir=vdulab_structure_dir,
         vdulab_fasta_dir=vdulab_fasta_dir,
         af3_structure_dir=af3_structure_dir,
         output=output,
         summary_output=summary_output,
+        stats_output=stats_output,
     )
     build_registry(paths, load_config(config))
 

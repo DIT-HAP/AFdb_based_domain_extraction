@@ -60,7 +60,7 @@ The `01_`–`12_` file prefixes match rows 3.1–3.12 below.
 
 | # | File | Rows | Contents |
 |---|---|---:|---|
-| 3.1 | `01_merged_table.tsv` | 5,142 | Per-gene sequence-first AFdb/PomBase merge; input to the registry |
+| 3.1 | `01_merged_table.tsv` | 5,142 | Per-gene sequence-first AFdb/PomBase merge with both sequences and `relationship`; input to the registry |
 | 3.2 | `02_afdb_entry_roles.tsv` | 5,196 | AFdb v6 entry roles against selected genes |
 | 3.3 | `03_shared_comparison.tsv` | 5,109 | Paired genes, field by field (5,071 sequence + 38 ID fallback) |
 | 3.4 | `04_shared_by_sequence.tsv` | 72 | Sequence matches whose entry is not the gene's UniProt accession |
@@ -78,12 +78,13 @@ The `01_`–`12_` file prefixes match rows 3.1–3.12 below.
 Producer: **R7** `build_registry` → **S1** → **S3** → **S5** `src/registry.py`
 → `results/04_registry/`
 
-The same rule writes both files.
+The same rule writes all three files.
 
 | # | File | Rows | Contents |
 |---|---|---:|---|
 | 4.1 | `01_gene_structure_registry.tsv` | 5,142 | One row per gene: selected structure, PAE matrix, modelled sequence, coordinate basis, and `in_analysis` flag |
 | 4.2 | `02_registry_summary.tsv` | 9 | Gene counts grouped by `selection_reason` and `structure_source` |
+| 4.3 | `03_registry_stats.tsv` | 8 | Downstream counts derived from the registry (vDulab, AF3, TED/ECOD) |
 
 ## Curated branch
 
@@ -172,7 +173,7 @@ outside the acceptance criteria.
 | R4 | `refresh_uniprot_triangulation` | `rules/02_uniprot.smk` | `refresh-uniprot-triangulation` | S1, S3, S13 | #2.1 |
 | R5 | `refresh_uniprot_resolution` | `rules/02_uniprot.smk` | `refresh-uniprot-resolution` | S1, S3, S13 | #2.2 |
 | R6 | `compare_afdb_pombase` | `rules/03_compare.smk` | `compare_afdb_pombase.py` | S2 | #3 |
-| R7 | `build_registry` | `rules/04_registry.smk` | `build-registry` | S1, S3, S5 | #4.1, #4.2 |
+| R7 | `build_registry` | `rules/04_registry.smk` | `build-registry` | S1, S3, S5 | #4.1, #4.2, #4.3 |
 | R8 | `registry_pae_to_domains` | `rules/05_curated.smk` | `registry-pae-to-domains` | S1, S3, S6 | #5 |
 | R9 | `registry_domains_to_table` | `rules/05_curated.smk` | `registry-domains-to-table` | S1, S3, S6 | #6 |
 | R10 | `registry_extract_plddt` | `rules/05_curated.smk` | `registry-extract-plddt` | S1, S3, S7 | #7 |

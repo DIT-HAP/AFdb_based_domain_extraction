@@ -37,7 +37,11 @@ exact sequence match exists:
 `structure_sequence`, `modeled_length`, `coordinate_basis`, and
 `ted_ecod_coordinate_ok`. The TED/ECOD flag is exact sequence equality between
 the AFdb v4 model and the selected structure; genes with a v4/v6 difference
-are excluded from TED/ECOD rather than risking coordinate drift.
+are excluded from TED/ECOD rather than risking coordinate drift. The comparison
+merged table already carries `afdb_sequence`, `pombase_sequence`, and
+`relationship`, so the registry reads one input table and writes
+`03_registry_stats.tsv` with the downstream counts the comparison report cannot
+know.
 
 Sequence-first pairing changes the source of 63 genes whose AFdb v6 primary
 entry no longer matches the PomBase peptide: the registry uses the alternate

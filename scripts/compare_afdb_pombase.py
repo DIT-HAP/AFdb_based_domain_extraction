@@ -54,7 +54,7 @@ Usage
     python compare_afdb_pombase.py \
         --afdb-entries results/01_afdb/03_afdb_entries.tsv \
         --afdb-source /hugedata/YushengYang/AFdb/UP000002485_284812_SCHPO_v6 \
-        --pombase-dir tmp/afdb_vs_pombase/reference/pombase-2026-11-01 \
+        --pombase-dir tmp/afdb_vs_pombase/reference/pombase-2026-06-01 \
         --output-dir tmp/afdb_vs_pombase/outputs \
         --uniprot-resolution tmp/afdb_vs_pombase/intermediate/uniprot_resolution.tsv \
         --uniprot-triangulation tmp/afdb_vs_pombase/intermediate/uniprot_triangulation.tsv
@@ -129,7 +129,7 @@ POMBASE_ONLY_COLUMNS = [
     "gene_product",
     "uniprot_id",
     "pombase_length",
-    "matched_afdb_only_accessions",
+    "pombase_sequence",
     "reason",
     "exceeds_afdb_max_length",
 ]
@@ -144,10 +144,13 @@ MERGED_COLUMNS = [
     "gene_product",
     "gene_type",
     "afdb_description",
+    "afdb_sequence",
     "afdb_length",
     "pombase_length",
+    "pombase_sequence",
     "length_delta",
     "sequence_category",
+    "relationship",
     "n_substitutions",
     "n_afdb_extra",
     "n_pombase_extra",
@@ -588,7 +591,6 @@ def build_pombase_only(unpaired_genes: pd.DataFrame, afdb_max_length: int) -> pd
     """List genes with no AFdb structure, with length and reason."""
     table = unpaired_genes.copy()
     table["uniprot_id"] = table["pombase_accession"].fillna("")
-    table["matched_afdb_only_accessions"] = ""
     table["exceeds_afdb_max_length"] = table["pombase_length"] > afdb_max_length
     table["reason"] = np.select(
         [table["pombase_accession"].isna(), table["exceeds_afdb_max_length"]],
@@ -1229,8 +1231,8 @@ def render_recommendations(counts: dict[str, int]) -> str:
 2. **序列替换条目**:{counts["sequence_rescued_genes"]:,} 个基因使用的 AFdb 条目不是其
    UniProt accession 对应的条目;其中 {counts["afdb_only_superseded"]:,} 个原条目序列与
    PomBase 不同,已列入第 4 节。注册表对这些基因使用序列精确一致的替代条目。
-3. **序列不一致蛋白**:共 {nonidentical:,} 个。注册表对其中 37 个使用 vDulab,
-   SPCC569.03 因预测序列与 PomBase 不符而排除。加上长蛋白,vDulab 共 45 个,AF3 共 3 个。
+3. **序列不一致蛋白**:共 {nonidentical:,} 个。注册表对其中一部分使用 vDulab/AF3,
+   具体数量见 `results/04_registry/03_registry_stats.tsv`。
    由于 AFdb 结构选择条件是序列精确一致,下游不再需要 UniProt/PomBase 坐标转换。
 4. **无 AFdb 结构的基因**:{counts["pombase_only_genes"]:,} 个;其中
    {counts["pombase_only_length_cutoff"]:,} 个超过 AFdb 最大建模长度
@@ -1240,7 +1242,8 @@ def render_recommendations(counts: dict[str, int]) -> str:
    结构无 PAE {counts["afdb_accessions_without_pae"]:,} 个,PAE 无结构
    {counts["pae_accessions_without_afdb"]:,} 个。
 6. **TED/ECOD**:TED/ECOD 的坐标来自 AFdb v4。只有 AFdb v4 序列与所选结构序列完全一致时
-   才纳入 TED/ECOD(当前 4,950 个基因);v4/v6 不一致的基因不做 TED/ECOD,避免坐标错位。
+   才纳入 TED/ECOD;纳入数量见 `results/04_registry/03_registry_stats.tsv`。
+   v4/v6 不一致的基因不做 TED/ECOD,避免坐标错位。
 """
 
 
@@ -1285,7 +1288,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True, help="Output directory.")
     parser.add_argument(
         "--pombase-release",
-        default="2026-11-01",
+        default="2026-06-01",
         help="PomBase release label written to the report.",
     )
     parser.add_argument(
@@ -1364,11 +1367,13 @@ def write_excel(
     summary = pd.DataFrame({"metric": list(counts), "value": list(counts.values())})
     shared = merged.loc[merged["category"] == "shared"]
     sequence_columns = ["afdb_sequence", "pombase_sequence"]
+    merged_view = merged.drop(columns=sequence_columns)
+    shared_view = shared.drop(columns=sequence_columns)
     workbook_path = config.output_dir / "10_afdb_vs_pombase.xlsx"
 
     with pd.ExcelWriter(workbook_path, engine=EXCEL_ENGINE) as writer:
         summary.to_excel(writer, sheet_name="summary", index=False)
-        merged.to_excel(writer, sheet_name="merged", index=False)
+        merged_view.to_excel(writer, sheet_name="merged", index=False)
         afdb_entry_table.to_excel(writer, sheet_name="afdb_entries", index=False)
         shared_comparison.loc[shared_comparison["match_method"] == "uniprot_id"].drop(
             columns=sequence_columns
@@ -1389,7 +1394,7 @@ def write_excel(
             ("indel_only", "shared_indel"),
             ("both", "shared_both"),
         ):
-            shared.loc[shared["sequence_category"] == category].to_excel(
+            shared_view.loc[shared_view["sequence_category"] == category].to_excel(
                 writer, sheet_name=sheet_name, index=False
             )
 
@@ -1405,7 +1410,9 @@ def write_excel(
             afdb_only_no_sequence["match_status"] == "superseded_by_sequence_match"
         ].to_excel(writer, sheet_name="afdb_only_superseded", index=False)
 
-        pombase_only.to_excel(writer, sheet_name="pombase_only_all", index=False)
+        pombase_only.drop(columns=["pombase_sequence"]).to_excel(
+            writer, sheet_name="pombase_only_all", index=False
+        )
 
     logger.info(f"Excel workbook written to {workbook_path}")
 

@@ -48,7 +48,6 @@ REGISTRY_PAE_REQUIRED = [
     "protein_length",
 ]
 REGISTRY_PLDDT_REQUIRED = ["gene_systematic_id", "protein_length", "pLDDT"]
-GROUP_KEYS = ["uniprot_id", "version", "protein_length"]
 STAT_COLUMNS = ["domain_length", "mean_pLDDT", "fraction_gt_70"]
 REFORMATED_COLUMNS = [
     "Systematic ID",
@@ -168,12 +167,12 @@ def _clusters_overlap(merged_clusters: list[list[str]]) -> bool:
     return bool(set(overlapping))
 
 
-def build_plddt_lookup(plddt: pd.DataFrame) -> dict[str, np.ndarray]:
+def build_plddt_lookup(plddt: pd.DataFrame, id_column: str = "uniprot_id") -> dict[str, np.ndarray]:
     """Map each protein to its per-residue pLDDT array."""
-    unique = plddt.drop_duplicates("uniprot_id")
+    unique = plddt.drop_duplicates(id_column)
     return {
-        uniprot_id: np.asarray(values.split(","), dtype=float)
-        for uniprot_id, values in zip(unique["uniprot_id"], unique["pLDDT"], strict=True)
+        protein_id: np.asarray(values.split(","), dtype=float)
+        for protein_id, values in zip(unique[id_column], unique["pLDDT"], strict=True)
     }
 
 
@@ -181,11 +180,12 @@ def attach_stats(
     frame: pd.DataFrame,
     plddt_lookup: dict[str, np.ndarray],
     threshold: float,
+    id_column: str = "uniprot_id",
 ) -> pd.DataFrame:
     """Attach length and pLDDT summary columns to a domain table."""
     stats = [
-        domain_stats(interval, plddt_lookup[uniprot_id], threshold)
-        for interval, uniprot_id in zip(frame["domain_residues"], frame["uniprot_id"], strict=True)
+        domain_stats(interval, plddt_lookup[protein_id], threshold)
+        for interval, protein_id in zip(frame["domain_residues"], frame[id_column], strict=True)
     ]
     result = frame.copy()
     result["domain_length"] = [row[0] for row in stats]
@@ -194,12 +194,13 @@ def attach_stats(
     return result
 
 
-def _sort_and_number(frame: pd.DataFrame) -> pd.DataFrame:
+def _sort_and_number(frame: pd.DataFrame, id_column: str) -> pd.DataFrame:
     """Sort domains by genomic start and assign 1-based domain ids."""
+    group_keys = [id_column, "version", "protein_length"]
     result = frame.copy()
     result["_start"] = result["domain_residues"].str.split("-").str[0].astype(int)
-    result = result.sort_values([*GROUP_KEYS, "_start"], kind="stable").drop(columns="_start")
-    result["domain_id"] = result.groupby(GROUP_KEYS, sort=False).cumcount() + 1
+    result = result.sort_values([*group_keys, "_start"], kind="stable").drop(columns="_start")
+    result["domain_id"] = result.groupby(group_keys, sort=False).cumcount() + 1
     return result
 
 
@@ -223,9 +224,8 @@ def _join_gene_annotation(
 
 def _join_registry_annotation(frame: pd.DataFrame, registry: pd.DataFrame) -> pd.DataFrame:
     """Attach the registry's gene id and primary accession."""
-    numbered = frame.rename(columns={"uniprot_id": "gene_systematic_id"})
     annotation = registry[["gene_systematic_id", "uniprot_id"]]
-    result = annotation.merge(numbered, on="gene_systematic_id", how="right")
+    result = annotation.merge(frame, on="gene_systematic_id", how="right")
     return result.rename(columns={"gene_systematic_id": "Systematic ID"})
 
 
@@ -233,28 +233,33 @@ def build_reformated_frame(
     pae: pd.DataFrame,
     plddt: pd.DataFrame,
     parameters: PipelineParameters,
+    *,
+    id_column: str = "uniprot_id",
 ) -> pd.DataFrame:
     """Merge PAE clusters with pLDDT confidence into one reformatted frame."""
-    lookup = build_plddt_lookup(plddt)
-    merged = pae.merge(plddt[["uniprot_id", "protein_length"]], on=["uniprot_id", "protein_length"])
-    merged = attach_stats(merged, lookup, parameters.plddt_threshold)
-    exploded = _merge_groups(merged, parameters)
-    numbered = _sort_and_number(exploded)
-    return attach_stats(numbered, lookup, parameters.plddt_threshold)
+    lookup = build_plddt_lookup(plddt, id_column)
+    merged = pae.merge(plddt[[id_column, "protein_length"]], on=[id_column, "protein_length"])
+    merged = attach_stats(merged, lookup, parameters.plddt_threshold, id_column)
+    exploded = _merge_groups(merged, parameters, id_column)
+    numbered = _sort_and_number(exploded, id_column)
+    return attach_stats(numbered, lookup, parameters.plddt_threshold, id_column)
 
 
 # =============================================================================
 # 4. IMPERATIVE SHELL (I/O Orchestration)
 # =============================================================================
-def _merge_groups(frame: pd.DataFrame, parameters: PipelineParameters) -> pd.DataFrame:
+def _merge_groups(
+    frame: pd.DataFrame, parameters: PipelineParameters, id_column: str
+) -> pd.DataFrame:
     """Apply the merge rules per protein and return one row per merged domain."""
+    group_keys = [id_column, "version", "protein_length"]
     records = []
-    for indices in frame.groupby(GROUP_KEYS, sort=False).indices.values():
+    for indices in frame.groupby(group_keys, sort=False).indices.values():
         group = frame.iloc[indices]
         first = group.iloc[0]
         records.extend(
             {
-                "uniprot_id": first["uniprot_id"],
+                id_column: first[id_column],
                 "version": first["version"],
                 "protein_length": first["protein_length"],
                 "domain_residues": interval,
@@ -299,9 +304,7 @@ def build_reformated_table_from_registry(
     require_columns(plddt, REGISTRY_PLDDT_REQUIRED, plddt_path)
     require_columns(registry, REGISTRY_REQUIRED, registry_path)
 
-    pae = pae.rename(columns={"gene_systematic_id": "uniprot_id"})
-    plddt = plddt.rename(columns={"gene_systematic_id": "uniprot_id"})
-    numbered = build_reformated_frame(pae, plddt, parameters)
+    numbered = build_reformated_frame(pae, plddt, parameters, id_column="gene_systematic_id")
     annotated = _join_registry_annotation(numbered, registry)
     write_tsv(annotated[REFORMATED_COLUMNS], output_path)
 

@@ -137,25 +137,25 @@ def read_subset(path: Path) -> set[str]:
 
 
 def parse_domain_filename(name: str) -> tuple[str, str]:
-    """Extract the UniProt accession and model version from a ``.domain`` name."""
+    """Extract the protein identifier and model version from a ``.domain`` name."""
     stem = name.removesuffix(DOMAIN_SUFFIX)
-    uniprot_id = stem.split(VERSION_SEPARATOR)[0].removeprefix("AF-")
+    identifier = stem.split(VERSION_SEPARATOR)[0].removeprefix("AF-")
     version = stem.rsplit("_", 1)[1]
-    return uniprot_id, version
+    return identifier, version
 
 
 def build_domain_table(domains_dir: Path, output_path: Path, id_column: str = "uniprot_id") -> None:
     """Collect every ``.domain`` file into the PAE domain table."""
     records: list[dict[str, object]] = []
     for path in sorted(domains_dir.glob(f"*{DOMAIN_SUFFIX}")):
-        uniprot_id, version = parse_domain_filename(path.name)
+        identifier, version = parse_domain_filename(path.name)
         runs = domain_file_to_runs(path)
         if not runs:
             continue
         protein_length = max(int(run.split("-")[-1]) for run in runs)
         records.extend(
             {
-                "uniprot_id": uniprot_id,
+                id_column: identifier,
                 "version": version,
                 "domain_id": domain_id,
                 "domain_residues": run,
@@ -166,10 +166,10 @@ def build_domain_table(domains_dir: Path, output_path: Path, id_column: str = "u
 
     table = pd.DataFrame.from_records(
         records,
-        columns=["uniprot_id", "version", "domain_id", "domain_residues", "protein_length"],
+        columns=[id_column, "version", "domain_id", "domain_residues", "protein_length"],
     )
-    table = table.sort_values(["uniprot_id", "version", "domain_id"], ignore_index=True)
-    write_tsv(table.rename(columns={"uniprot_id": id_column}), output_path)
+    table = table.sort_values([id_column, "version", "domain_id"], ignore_index=True)
+    write_tsv(table, output_path)
 
 
 def process_pae_file(

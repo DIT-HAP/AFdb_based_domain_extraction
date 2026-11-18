@@ -5,10 +5,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from src.dna import organize_domains
+from src.files import PipelineParameters
 from src.pae import domain_file_to_runs, parse_domain_filename
 from src.plddt import check_overlap, domain_stats, merge_intervals, parse_structure_id
-from src.segments import assign_type
+from src.segments import assign_type, build_reformated_frame
 from src.unify import attach_pombase_annotation, expand_intervals
+
+PARAMETERS = PipelineParameters(
+    pae_power=1.0,
+    pae_cutoff=5.0,
+    resolution=0.5,
+    plddt_threshold=70.0,
+    merge_gap=11,
+    confident_min_length=50,
+    confident_merge_gap=6,
+)
 
 
 def test_merge_intervals_adjacent() -> None:
@@ -99,6 +110,29 @@ def test_assign_type() -> None:
     result = assign_type(frame, 70.0)
     assert result["location"].tolist() == ["N-terminal", "C-terminal", "Whole", "middle"]
     assert result["domain_type"].tolist() == ["domain", "disordered", "domain", "disordered"]
+
+
+def test_build_reformated_frame_uses_registry_gene_id() -> None:
+    pae = pd.DataFrame(
+        {
+            "gene_systematic_id": ["g1", "g1"],
+            "version": ["vAF3", "vAF3"],
+            "protein_length": [6, 6],
+            "domain_residues": ["1-3", "4-6"],
+            "mean_pLDDT": [90.0, 50.0],
+        }
+    )
+    plddt = pd.DataFrame(
+        {
+            "gene_systematic_id": ["g1"],
+            "protein_length": [6],
+            "pLDDT": ["90,90,90,50,50,50"],
+        }
+    )
+    result = build_reformated_frame(pae, plddt, PARAMETERS, id_column="gene_systematic_id")
+    assert result["gene_systematic_id"].tolist() == ["g1", "g1"]
+    assert result["domain_residues"].tolist() == ["1-3", "4-6"]
+    assert "uniprot_id" not in result.columns
 
 
 def test_organize_domains(tmp_path: Path) -> None:

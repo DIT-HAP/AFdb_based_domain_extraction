@@ -28,7 +28,7 @@ rule compare_afdb_pombase:
         raw_peptides=f"{COMPARISON}/12_pombase_peptides.tsv",
     params:
         script=str(COMPARE_SCRIPT),
-        pombase_dir=POMBASE_2026,
+        pombase_dir=POMBASE_CODING_DIR,
         release=config["resources"]["pombase"]["coding_release"],
         afdb_source=AFDB_SOURCE,
     conda:

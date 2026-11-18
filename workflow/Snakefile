@@ -16,7 +16,8 @@ Input
 Output
 ------
 - ``results/01_afdb/03_afdb_entries.tsv``,
-  ``results/04_registry/01_gene_structure_registry.tsv``, and
+  ``results/04_registry/01_gene_structure_registry.tsv``,
+  ``results/04_registry/03_registry_stats.tsv``, and
   ``results/10_segments.tsv``.
 
 Usage
@@ -61,9 +62,9 @@ def resolve(spec):
 
 
 # Pinned external resources.
-POMBASE_2026 = str(PROJECT_ROOT / "resources" / "pombase" / "2026-06-01")
+POMBASE_CODING_DIR = Path(resolve(config["resources"]["pombase"]["gene_table"])).parent
 POMBASE_GENE_TABLE = resolve(config["resources"]["pombase"]["gene_table"])
-POMBASE_PEPTIDE = f"{POMBASE_2026}/peptide.fa.gz"
+POMBASE_PEPTIDE = str(POMBASE_CODING_DIR / "peptide.fa.gz")
 POMBASE_PEPTIDE_STATS = resolve(config["resources"]["pombase"]["peptide_stats"])
 POMBASE_GFF3 = resolve(config["resources"]["pombase"]["gff3"])
 FEATURES_GENE_TABLE = resolve(config["resources"]["pombase"]["features_gene_table"])
@@ -80,6 +81,7 @@ COMPARISON = f"{RESULTS}/03_comparison"
 REGISTRY_RESULTS = f"{RESULTS}/04_registry"
 REGISTRY_TABLE = f"{REGISTRY_RESULTS}/01_gene_structure_registry.tsv"
 REGISTRY_SUMMARY = f"{REGISTRY_RESULTS}/02_registry_summary.tsv"
+REGISTRY_STATS = f"{REGISTRY_RESULTS}/03_registry_stats.tsv"
 PAE_DOMAINS = f"{RESULTS}/05_domains"
 PAE_TABLE = f"{RESULTS}/06_PAE_domain.tsv"
 PLDDT_TABLE = f"{RESULTS}/07_pLDDT_scores.tsv"
@@ -117,6 +119,7 @@ rule all:
     input:
         f"{AFDB_RESULTS}/03_afdb_entries.tsv",
         REGISTRY_TABLE,
+        REGISTRY_STATS,
         SEGMENTS_TABLE,
         expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
     output:
