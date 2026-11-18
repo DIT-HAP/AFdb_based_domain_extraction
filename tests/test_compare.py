@@ -7,6 +7,8 @@ import pandas as pd
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compare_afdb_pombase.py"
 SPEC = importlib.util.spec_from_file_location("compare_afdb_pombase", SCRIPT)
+assert SPEC is not None
+assert SPEC.loader is not None
 COMPARE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMPARE)
 
@@ -73,3 +75,15 @@ def test_unmatched_gene_stays_pombase_only() -> None:
     assert row["match_method"] == "none"
     assert pd.isna(row["afdb_accession"])
     assert row["uniprot_id"] == "E"
+
+
+def test_load_pombase_peptides_keeps_raw_and_truncated_sequences(tmp_path: Path) -> None:
+    fasta = tmp_path / "peptide.fa"
+    fasta.write_text(">SPAC1.01.1:pep first\nMAA*\n>SPAC2.02.1:pep second\nM*AA\n")
+
+    peptides, raw = COMPARE.load_pombase_peptides(tmp_path)
+
+    assert raw["gene_systematic_id"].tolist() == ["SPAC1.01", "SPAC2.02"]
+    assert raw["raw_sequence"].tolist() == ["MAA*", "M*AA"]
+    assert peptides["pombase_sequence"].tolist() == ["MAA", "M"]
+    assert peptides["internal_stop_truncated"].tolist() == [False, True]

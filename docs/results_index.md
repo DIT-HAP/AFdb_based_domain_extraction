@@ -56,7 +56,7 @@ in `resources/uniprot/`.
 Producer: **R6** `compare_afdb_pombase` → **S2** `scripts/compare_afdb_pombase.py`
 → `results/03_comparison/`
 
-The `01_`–`10_` file prefixes match rows 3.1–3.10 below.
+The `01_`–`12_` file prefixes match rows 3.1–3.12 below.
 
 | # | File | Rows | Contents |
 |---|---|---:|---|
@@ -70,6 +70,8 @@ The `01_`–`10_` file prefixes match rows 3.1–3.10 below.
 | 3.8 | `08_summary_counts.tsv` | 42 | Headline counts |
 | 3.9 | `09_report.md` | — | Readable report with numbered sections |
 | 3.10 | `10_afdb_vs_pombase.xlsx` | — | Excel workbook of the same tables |
+| 3.11 | `11_pombase_coding_genes.tsv` | 5,126 | Protein-coding gene table used for pairing |
+| 3.12 | `12_pombase_peptides.tsv` | 5,126 | `peptide.fa` converted to gene ID and raw sequence (stops retained) |
 
 ### 4. Gene structure registry
 

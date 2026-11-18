@@ -24,6 +24,8 @@ rule compare_afdb_pombase:
         counts=f"{COMPARISON}/08_summary_counts.tsv",
         report=f"{COMPARISON}/09_report.md",
         workbook=f"{COMPARISON}/10_afdb_vs_pombase.xlsx",
+        coding_genes=f"{COMPARISON}/11_pombase_coding_genes.tsv",
+        raw_peptides=f"{COMPARISON}/12_pombase_peptides.tsv",
     params:
         script=str(COMPARE_SCRIPT),
         pombase_dir=POMBASE_2026,

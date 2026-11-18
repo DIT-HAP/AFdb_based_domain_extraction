@@ -45,6 +45,9 @@ Output
 - ``09_report.md``: human-readable difference report.
 - ``10_afdb_vs_pombase.xlsx``: multi-sheet workbook with the merged table and
   per-category sheets.
+- ``11_pombase_coding_genes.tsv``: protein-coding gene table used for pairing.
+- ``12_pombase_peptides.tsv``: peptide FASTA converted to gene ID and raw
+  sequence (stop codons retained).
 
 Usage
 -----
@@ -192,6 +195,7 @@ class PeptideCol(StrEnum):
 
     SYSTEMATIC_ID = "gene_systematic_id"
     SEQUENCE = "pombase_sequence"
+    RAW_SEQUENCE = "raw_sequence"
     LENGTH = "pombase_length"
     INTERNAL_STOP = "internal_stop_truncated"
 
@@ -332,13 +336,17 @@ def read_peptide_fasta(path: Path) -> list[tuple[str, str]]:
         ]
 
 
-def load_pombase_peptides(pombase_dir: Path) -> pd.DataFrame:
-    """Parse the PomBase peptide FASTA into gene-level sequences cut at the first stop codon."""
+def load_pombase_peptides(pombase_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Parse the peptide FASTA into a raw ID/sequence table and stop-truncated gene sequences."""
     fasta_path = pombase_dir / "peptide.fa.gz"
     if not fasta_path.exists():
         fasta_path = pombase_dir / "peptide.fa"
 
     raw_records = read_peptide_fasta(fasta_path)
+    raw_peptides = pd.DataFrame(
+        raw_records,
+        columns=pd.Index([PeptideCol.SYSTEMATIC_ID.value, PeptideCol.RAW_SEQUENCE.value]),
+    )
     records = []
     for systematic_id, raw_sequence in raw_records:
         sequence, had_internal_stop = truncate_peptide_at_first_stop(raw_sequence)
@@ -368,7 +376,7 @@ def load_pombase_peptides(pombase_dir: Path) -> pd.DataFrame:
     unexpected = set("".join(peptides[PeptideCol.SEQUENCE])) - STANDARD_AMINO_ACIDS
     if unexpected:
         logger.warning(f"Non-standard residues in PomBase peptides: {sorted(unexpected)}")
-    return peptides
+    return peptides, raw_peptides
 
 
 # =============================================================================
@@ -1318,6 +1326,8 @@ def write_tables(
     afdb_entry_table: pd.DataFrame,
     afdb_only: pd.DataFrame,
     pombase_only: pd.DataFrame,
+    pombase_genes: pd.DataFrame,
+    raw_peptides: pd.DataFrame,
     counts: dict[str, int],
 ) -> None:
     """Write all tabular outputs."""
@@ -1336,6 +1346,8 @@ def write_tables(
     pd.DataFrame({"metric": list(counts), "value": list(counts.values())}).to_csv(
         config.output_dir / "08_summary_counts.tsv", sep="\t", index=False
     )
+    pombase_genes.to_csv(config.output_dir / "11_pombase_coding_genes.tsv", sep="\t", index=False)
+    raw_peptides.to_csv(config.output_dir / "12_pombase_peptides.tsv", sep="\t", index=False)
 
 
 def write_excel(
@@ -1409,7 +1421,7 @@ def main() -> int:
         pombase_genes = gene_catalog.loc[
             gene_catalog[GeneCol.GENE_TYPE] == PROTEIN_CODING
         ].reset_index(drop=True)
-        pombase_peptides = load_pombase_peptides(config.pombase_dir)
+        pombase_peptides, raw_peptides = load_pombase_peptides(config.pombase_dir)
 
         pairs = assign_structure_accessions(pombase_genes, pombase_peptides, afdb_entries)
         paired = pairs.loc[pairs["match_method"] != "none"].reset_index(drop=True)
@@ -1465,6 +1477,8 @@ def main() -> int:
             afdb_entry_table,
             afdb_only,
             pombase_only,
+            pombase_genes,
+            raw_peptides,
             counts,
         )
         write_excel(
