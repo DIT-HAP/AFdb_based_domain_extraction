@@ -2,13 +2,12 @@
 # Path roots
 # -----------------------------------------------------------------------------
 # Only these roots are machine-specific. Everything else is expressed relative
-# to one of them with a prefix: cache: / reference: / legacy: / raw: / project:
+# to one of them with a prefix: cache: / reference: / legacy: / project:
 # =============================================================================
 paths:
   cache_root: "/data/c/yangyusheng_optimized/resource"
   reference_root: "/hugedata/YushengYang/AFdb"
   legacy_root: "/data/c/yangyusheng_optimized/AFdb_based_domain_extraction"
-  raw_root: "/data/c/yangyusheng_optimized/AFdb_based_domain_extraction/data/0_raw"
   project_root: "."
 
 # =============================================================================
@@ -64,15 +63,15 @@ datasets:
     enabled: false
   LocalAF2_DY47073Annotation: &local_af2_dy47073
     version: "LocalAF2_DY47073Annotation_20240904"
-    structure: "raw:20240904_formated_results_vDulab2_noNaN/vDulab2"
-    pae: "raw:20240904_formated_results_vDulab2_noNaN/PAE_files"
+    structure: "reference:archive/0_raw_20261119/20240904_formated_results_vDulab2_noNaN/vDulab2"
+    pae: "reference:archive/0_raw_20261119/20240904_formated_results_vDulab2_noNaN/PAE_files"
     gene_table: "project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"
     enabled: false
   AF3_LongProt:
     version: "AF3_LongProt_20241101"
     structure: "reference:predictions/AF3_LongProt_20241101/structure"
     pae: "reference:predictions/AF3_LongProt_20241101/pae"
-    gene_table: "raw:20241101_AF3_output/AF3_gene_IDs_names_products.tsv"
+    gene_table: "reference:archive/0_raw_20261119/20241101_AF3_output/AF3_gene_IDs_names_products.tsv"
     enabled: false
   DY47073_ProteinSubset:
     <<: *local_af2_dy47073

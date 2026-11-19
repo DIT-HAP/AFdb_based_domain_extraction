@@ -3,8 +3,7 @@ Project I/O boundary.
 =====================
 
 Loads ``config/config.yaml``, resolves the ``cache:`` / ``reference:`` /
-``legacy:`` / ``raw:`` / ``project:`` path grammar, and provides fail-fast TSV
-access.
+``legacy:`` / ``project:`` path grammar, and provides fail-fast TSV access.
 
 The path grammar keeps machine-specific roots in exactly one place, so moving
 the project to another server means editing the roots at the top of the YAML.
@@ -93,7 +92,6 @@ class AppConfig:
     cache_root: Path
     reference_root: Path
     legacy_root: Path
-    raw_root: Path
     project_root: Path
     resources: ResourcePaths
     datasets: dict[str, DatasetConfig]
@@ -105,7 +103,6 @@ class AppConfig:
             "cache": self.cache_root,
             "reference": self.reference_root,
             "legacy": self.legacy_root,
-            "raw": self.raw_root,
             "project": self.project_root,
         }
         return _resolve_spec(spec, roots)
@@ -153,7 +150,6 @@ def load_config(config_path: Path) -> AppConfig:
         "cache": Path(paths["cache_root"]),
         "reference": Path(paths["reference_root"]),
         "legacy": Path(paths["legacy_root"]),
-        "raw": Path(paths["raw_root"]),
         "project": Path(paths["project_root"]).resolve(),
     }
     pombase = resources["pombase"]
@@ -161,7 +157,6 @@ def load_config(config_path: Path) -> AppConfig:
         cache_root=roots["cache"],
         reference_root=roots["reference"],
         legacy_root=roots["legacy"],
-        raw_root=roots["raw"],
         project_root=roots["project"],
         resources=ResourcePaths(
             pombase_gene_table=_resolve_spec(pombase["gene_table"], roots),

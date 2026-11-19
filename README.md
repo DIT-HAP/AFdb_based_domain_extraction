@@ -87,10 +87,9 @@ python scripts/afdb_domains.py pae-to-domains --pae-dir <dir> --output-dir <dir>
   `TED/` and `ECOD/` dumps.
 - `legacy_root` — the v1 repository, used as the read-only numerical
   verification baseline.
-- `raw_root` — the v1 `data/0_raw` directory holding custom predictions.
 
-All other paths are written with a `cache:`, `reference:`, `legacy:`, `raw:`,
-or `project:` prefix and resolved at load time.
+All other paths are written with a `cache:`, `reference:`, `legacy:`, or
+`project:` prefix and resolved at load time.
 
 Resource versions are pinned per role because the legacy results mixed
 releases:

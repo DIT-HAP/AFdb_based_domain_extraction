@@ -43,17 +43,15 @@ configfile: str(CONFIG_PATH)
 CACHE_ROOT = Path(config["paths"]["cache_root"])
 REFERENCE_ROOT = Path(config["paths"]["reference_root"])
 LEGACY_ROOT = Path(config["paths"]["legacy_root"])
-RAW_ROOT = Path(config["paths"]["raw_root"])
 
 
 def resolve(spec):
-    """Resolve a cache:/reference:/legacy:/raw:/project: path specification."""
+    """Resolve a cache:/reference:/legacy:/project: path specification."""
     prefix, separator, relative = spec.partition(":")
     roots = {
         "cache": CACHE_ROOT,
         "reference": REFERENCE_ROOT,
         "legacy": LEGACY_ROOT,
-        "raw": RAW_ROOT,
         "project": PROJECT_ROOT,
     }
     if separator and prefix in roots:
