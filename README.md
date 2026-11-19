@@ -81,9 +81,10 @@ python scripts/afdb_domains.py pae-to-domains --pae-dir <dir> --output-dir <dir>
 
 `config/config.yaml` declares the machine-specific path roots:
 
-- `cache_root` — PomBase releases and AlphaFold structures.
-- `reference_root` — `/hugedata/YushengYang/AFdb`, holding the raw `TED/` and
-  `ECOD/` dumps.
+- `cache_root` — local scratch root, unused by the pipeline.
+- `reference_root` — `/hugedata/YushengYang/AFdb`, holding the AFdb structures
+  and PAE, the selected custom predictions under `predictions/`, and the raw
+  `TED/` and `ECOD/` dumps.
 - `legacy_root` — the v1 repository, used as the read-only numerical
   verification baseline.
 - `raw_root` — the v1 `data/0_raw` directory holding custom predictions.
@@ -100,8 +101,14 @@ releases:
 | PomBase features | `2026-06-01` | TED/ECOD protein ID mapping |
 | AlphaFold DB | v6 (hugedata) | Canonical structures and PAE |
 | AFdb v4 | `2023-07-08` | TED/ECOD coordinate validation only |
+| Local AF2 predictions | `2024-03-05` | 45 models for PomBase-vs-AFdb discordant genes |
+| AlphaFold 3 | `2024-11-01` | 3 long proteins without a usable local AF2 model |
 | TED | Zenodo 13908086 | Domain assignments |
 | ECOD | `dpam_v5` | Domain assignments |
+
+Selected custom predictions live under `reference_root/predictions/<version>/`
+with `structure/`, `pae/`, and `input_fasta/` subdirectories; the top-level
+`manifest.tsv` records source files and per-gene selection status.
 
 ## Pipeline
 

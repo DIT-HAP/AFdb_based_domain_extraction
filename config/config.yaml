@@ -32,10 +32,10 @@ resources:
   registry:
     afdb_dir: "reference:UP000002485_284812_SCHPO_v6"
     afdb_pae_dir: "reference:PAE/UP000002485_284812_SCHPO_v6"
-    afdb_v4_dir: "cache:AlphaFold_Dataset/20230708_downloaded/UP000002485_284812_SCHPO_v4"
-    vdulab_structure_dir: "raw:20240305_predicted_results/vDulab"
-    vdulab_fasta_dir: "legacy:results/Fasta_for_customed_prediction"
-    af3_structure_dir: "raw:20241101_AF3_output/PDB"
+    afdb_v4_dir: "reference:UP000002485_284812_SCHPO_v4"
+    vdulab_structure_dir: "reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/structure"
+    vdulab_fasta_dir: "reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/input_fasta"
+    af3_structure_dir: "reference:predictions/AF3_LongProt_20241101/structure"
   ted:
     release: "zenodo13908086"
     filtered_dump: "reference:TED/ted_365m.domain_summary.cath.globularity.taxid.tsv"

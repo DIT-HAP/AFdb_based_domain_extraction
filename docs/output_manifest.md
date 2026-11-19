@@ -57,7 +57,8 @@ Datasets covered: `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, `DY47073`.
    every field.
 3. **Duplicate legacy inputs.** The v1 `vDulab` tables came from
    `20240305_predicted_results`, not from the later renamed release. v2 pins
-   the 2024-03-05 directory.
+   the 2024-03-05 directory; the 45 sequence-consistent models are copied to
+   `predictions/LocalAF2_PomBaseDiffAFdb_20240305` on hugedata.
 4. **Column order.** v2 writes `domain_id/domain_residues` before
    `protein_length`; values are identical.
 5. **UniProt fallback in `Systematic ID`.** The current v1

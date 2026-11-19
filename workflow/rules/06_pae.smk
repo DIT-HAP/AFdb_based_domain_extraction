@@ -11,16 +11,16 @@ DATASETS = {
     "AFDB_v4": {
         "enabled": False,
         "source_version": "AFDB_v4_20230708",
-        "pae_dir": resolve("cache:AlphaFold_Dataset/20230708_downloaded/PAE_files"),
-        "structure_dir": resolve("cache:AlphaFold_Dataset/20230708_downloaded/UP000002485_284812_SCHPO_v4"),
+        "pae_dir": resolve("reference:PAE/UP000002485_284812_SCHPO_v4"),
+        "structure_dir": resolve("reference:UP000002485_284812_SCHPO_v4"),
         "gene_table": resolve("project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"),
     },
-    # Custom Dulab predictions, 2024-03-05 release (the one behind the legacy vDulab tables).
+    # Local AlphaFold 2 predictions, 2024-03-05 run (the one behind the legacy vDulab tables).
     "vDulab": {
         "enabled": False,
-        "source_version": "vDulab_20240305",
-        "pae_dir": resolve("raw:20240305_predicted_results/PAE_files"),
-        "structure_dir": resolve("raw:20240305_predicted_results/vDulab"),
+        "source_version": "LocalAF2_PomBaseDiffAFdb_20240305",
+        "pae_dir": resolve("reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/pae"),
+        "structure_dir": resolve("reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/structure"),
         "gene_table": resolve("project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"),
     },
     # Custom Dulab2 predictions, 2024-09-04.
@@ -34,9 +34,9 @@ DATASETS = {
     # AlphaFold 3 predictions, 2024-11-01.
     "AF3": {
         "enabled": False,
-        "source_version": "AF3_20241101",
-        "pae_dir": resolve("raw:20241101_AF3_output/PAE_files"),
-        "structure_dir": resolve("raw:20241101_AF3_output/PDB"),
+        "source_version": "AF3_LongProt_20241101",
+        "pae_dir": resolve("reference:predictions/AF3_LongProt_20241101/pae"),
+        "structure_dir": resolve("reference:predictions/AF3_LongProt_20241101/structure"),
         "gene_table": resolve("raw:20241101_AF3_output/AF3_gene_IDs_names_products.tsv"),
     },
     # Dulab2 predictions restricted to proteins present in the DY47073 annotation.

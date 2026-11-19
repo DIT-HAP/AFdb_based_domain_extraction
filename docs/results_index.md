@@ -224,7 +224,7 @@ was dropped: nothing referenced it, and the registry reads v6 through
 | # | Dataset | Source version |
 |---|---|---|
 | D1 | `AFDB_v4` | `AFDB_v4_20230708` |
-| D2 | `vDulab` | `vDulab_20240305` |
+| D2 | `vDulab` | `LocalAF2_PomBaseDiffAFdb_20240305` |
 | D3 | `vDulab2` | `vDulab2_20240904` |
-| D4 | `AF3` | `AF3_20241101` |
+| D4 | `AF3` | `AF3_LongProt_20241101` |
 | D5 | `DY47073` | `vDulab2_20240904` |

@@ -52,12 +52,18 @@ from src.files import AppConfig, read_tsv, require_columns, write_tsv
 # =============================================================================
 # 2. CONSTANTS & COLUMN CONTRACTS
 # =============================================================================
-CIF_NAME_PATTERN = re.compile(r"^AF-(?P<accession>.+)-F\d+-model_v[^.]+\.cif(?:\.gz)?$")
+CIF_NAME_PATTERN = re.compile(r"^AF-(?P<accession>.+)-F\d+-model_[^.]+\.cif(?:\.gz)?$")
 AFDB_PRIMARY = "AFDB_v6_primary"
 AFDB_SEQUENCE_MATCH = "AFDB_v6_sequence_match"
 AFDB_ALTERNATE = "AFDB_v6_alternate"
 VDULAB_SOURCE = "vDulab"
 AF3_SOURCE = "AF3"
+VDULAB_VERSION = "LocalAF2_PomBaseDiffAFdb_20240305"
+AF3_VERSION = "AF3_LongProt_20241101"
+VDULAB_STRUCTURE_PREFIX = f"reference:predictions/{VDULAB_VERSION}/structure/AF-"
+VDULAB_PAE_PREFIX = f"reference:predictions/{VDULAB_VERSION}/pae/AF-"
+AF3_STRUCTURE_PREFIX = f"reference:predictions/{AF3_VERSION}/structure/AF-"
+AF3_PAE_PREFIX = f"reference:predictions/{AF3_VERSION}/pae/AF-"
 NO_SOURCE = "none"
 NONIDENTICAL_CATEGORIES = ("substitution_only", "indel_only", "both")
 EXCLUSION_REASONS = {
@@ -192,7 +198,7 @@ def read_cif_sequence(path: Path) -> str:
 def load_cif_sequences(directory: Path) -> dict[str, str]:
     """Map every model accession in a directory to its modelled sequence."""
     sequences: dict[str, str] = {}
-    for path in sorted(directory.glob("AF-*-model_v*.cif*")):
+    for path in sorted(directory.glob("AF-*-model_*.cif*")):
         match = CIF_NAME_PATTERN.match(path.name)
         if match is None:
             raise ValueError(f"Unrecognised CIF filename: {path.name}")
@@ -356,8 +362,8 @@ def _attach_paths(registry: pd.DataFrame) -> pd.DataFrame:
         [is_afdb, is_vdulab, is_af3],
         [
             "reference:UP000002485_284812_SCHPO_v6/AF-" + structure_id + "-F1-model_v6.cif.gz",
-            "raw:20240305_predicted_results/vDulab/AF-" + structure_id + "-F1-model_vDulab.pdb.gz",
-            "raw:20241101_AF3_output/PDB/AF-" + structure_id + "-F1-model_vAF3.cif",
+            VDULAB_STRUCTURE_PREFIX + structure_id + f"-F1-model_{VDULAB_VERSION}.pdb.gz",
+            AF3_STRUCTURE_PREFIX + structure_id + f"-F1-model_{AF3_VERSION}.cif",
         ],
         default="",
     )
@@ -367,12 +373,8 @@ def _attach_paths(registry: pd.DataFrame) -> pd.DataFrame:
             "reference:PAE/UP000002485_284812_SCHPO_v6/AF-"
             + structure_id
             + "-F1-predicted_aligned_error_v6.json",
-            "raw:20240305_predicted_results/PAE_files/AF-"
-            + structure_id
-            + "-F1-predicted_aligned_error_vDulab.json",
-            "raw:20241101_AF3_output/PAE_files/AF-"
-            + structure_id
-            + "-F1-predicted_aligned_error_vAF3.json",
+            VDULAB_PAE_PREFIX + structure_id + f"-F1-predicted_aligned_error_{VDULAB_VERSION}.json",
+            AF3_PAE_PREFIX + structure_id + f"-F1-predicted_aligned_error_{AF3_VERSION}.json",
         ],
         default="",
     )
@@ -434,8 +436,8 @@ def build_registry(config: RegistryPaths, app_config: AppConfig) -> None:
     v4_sequences = load_cif_sequences(config.afdb_v4_dir)
     af3_sequences = load_cif_sequences(config.af3_structure_dir)
     vdulab_sequences = load_gene_fastas(config.vdulab_fasta_dir)
-    vdulab_stems = load_structure_ids(config.vdulab_structure_dir, "pdb.gz", VDULAB_SOURCE)
-    af3_stems = load_structure_ids(config.af3_structure_dir, "cif", "vAF3")
+    vdulab_stems = load_structure_ids(config.vdulab_structure_dir, "pdb.gz", VDULAB_VERSION)
+    af3_stems = load_structure_ids(config.af3_structure_dir, "cif", AF3_VERSION)
 
     vdulab = _match_prediction(registry, vdulab_stems, vdulab_sequences)
     af3 = _match_prediction(registry, af3_stems, af3_sequences, sequence_key="uniprot_id")
