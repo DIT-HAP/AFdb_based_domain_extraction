@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from src.dna import organize_domains
-from src.files import PipelineParameters
+from src.files import PipelineParameters, load_config
 from src.pae import domain_file_to_runs, parse_domain_filename
 from src.plddt import check_overlap, domain_stats, merge_intervals, parse_structure_id
 from src.segments import assign_type, build_reformated_frame
@@ -20,6 +20,18 @@ PARAMETERS = PipelineParameters(
     confident_min_length=50,
     confident_merge_gap=6,
 )
+
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
+
+
+def test_load_config_reads_datasets() -> None:
+    config = load_config(CONFIG_PATH)
+    assert config.datasets["LocalAF2_PomBaseDiffAFdb"].version == (
+        "LocalAF2_PomBaseDiffAFdb_20240305"
+    )
+    subset = config.datasets["DY47073_ProteinSubset"]
+    assert subset.protein_subset == "project:resources/dy47073/protein_subset.txt"
+    assert subset.enabled is False
 
 
 def test_merge_intervals_adjacent() -> None:
@@ -45,8 +57,10 @@ def test_domain_stats() -> None:
 
 
 def test_parse_domain_filename() -> None:
-    name = "AF-P12345-F1-predicted_aligned_error_v4.domain"
-    assert parse_domain_filename(name) == ("P12345", "v4")
+    legacy = "AF-P12345-F1-predicted_aligned_error_v4.domain"
+    assert parse_domain_filename(legacy) == ("P12345", "v4")
+    registry = "AF-P12345-F1-model_LocalAF2_PomBaseDiffAFdb.domain"
+    assert parse_domain_filename(registry) == ("P12345", "LocalAF2_PomBaseDiffAFdb")
 
 
 def test_domain_file_to_runs(tmp_path: Path) -> None:
@@ -57,7 +71,9 @@ def test_domain_file_to_runs(tmp_path: Path) -> None:
 
 def test_parse_structure_id() -> None:
     assert parse_structure_id("AF-P12345-F1-model_v4.pdb.gz") == "P12345"
-    assert parse_structure_id("AF-SPAC23G3.02c_1-702-F1-model_vAF3.cif") == "SPAC23G3.02c_1-702"
+    assert parse_structure_id("AF-SPAC23G3.02c_1-702-F1-model_AF3_LongProt_20241101.cif") == (
+        "SPAC23G3.02c_1-702"
+    )
 
 
 def test_expand_intervals() -> None:
@@ -116,7 +132,7 @@ def test_build_reformated_frame_uses_registry_gene_id() -> None:
     pae = pd.DataFrame(
         {
             "gene_systematic_id": ["g1", "g1"],
-            "version": ["vAF3", "vAF3"],
+            "version": ["AF3_LongProt", "AF3_LongProt"],
             "protein_length": [6, 6],
             "domain_residues": ["1-3", "4-6"],
             "mean_pLDDT": [90.0, 50.0],

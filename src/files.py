@@ -53,6 +53,19 @@ class ResourcePaths:
 
 
 @dataclass(kw_only=True, frozen=True)
+class DatasetConfig:
+    """Config-resolvable paths and provenance for one structure/PAE dataset."""
+
+    version: str
+    structure: str
+    pae: str
+    gene_table: str | None = None
+    fasta: str | None = None
+    protein_subset: str | None = None
+    enabled: bool = False
+
+
+@dataclass(kw_only=True, frozen=True)
 class PipelineParameters:
     """Immutable numerical parameters shared by the pipeline stages."""
 
@@ -83,6 +96,7 @@ class AppConfig:
     raw_root: Path
     project_root: Path
     resources: ResourcePaths
+    datasets: dict[str, DatasetConfig]
     parameters: PipelineParameters
 
     def resolve(self, spec: str) -> Path:
@@ -111,6 +125,22 @@ def setup_logger(verbose: bool = False) -> None:
         level=level,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level:<8}</level> | {message}",
     )
+
+
+def _load_datasets(raw: dict[str, Any]) -> dict[str, DatasetConfig]:
+    """Build one dataset configuration per ``datasets`` entry."""
+    return {
+        name: DatasetConfig(
+            version=spec["version"],
+            structure=spec["structure"],
+            pae=spec["pae"],
+            gene_table=spec.get("gene_table"),
+            fasta=spec.get("fasta"),
+            protein_subset=spec.get("protein_subset"),
+            enabled=spec.get("enabled", False),
+        )
+        for name, spec in raw["datasets"].items()
+    }
 
 
 def load_config(config_path: Path) -> AppConfig:
@@ -145,6 +175,7 @@ def load_config(config_path: Path) -> AppConfig:
             ecod_dump=_resolve_spec(resources["ecod"]["dump"], roots),
             ecod_release=resources["ecod"]["release"],
         ),
+        datasets=_load_datasets(raw),
         parameters=PipelineParameters(
             pae_power=float(parameters["pae_power"]),
             pae_cutoff=float(parameters["pae_cutoff"]),

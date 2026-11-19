@@ -1231,12 +1231,14 @@ def render_recommendations(counts: dict[str, int]) -> str:
 2. **序列替换条目**:{counts["sequence_rescued_genes"]:,} 个基因使用的 AFdb 条目不是其
    UniProt accession 对应的条目;其中 {counts["afdb_only_superseded"]:,} 个原条目序列与
    PomBase 不同,已列入第 4 节。注册表对这些基因使用序列精确一致的替代条目。
-3. **序列不一致蛋白**:共 {nonidentical:,} 个。注册表对其中一部分使用 vDulab/AF3,
-   具体数量见 `results/04_registry/03_registry_stats.tsv`。
+3. **序列不一致蛋白**:共 {nonidentical:,} 个。注册表对其中一部分使用
+   LocalAF2_PomBaseDiffAFdb/AF3_LongProt,具体数量见
+   `results/04_registry/03_registry_stats.tsv`。
    由于 AFdb 结构选择条件是序列精确一致,下游不再需要 UniProt/PomBase 坐标转换。
 4. **无 AFdb 结构的基因**:{counts["pombase_only_genes"]:,} 个;其中
    {counts["pombase_only_length_cutoff"]:,} 个超过 AFdb 最大建模长度
-   ({counts["afdb_max_length"]:,} aa)。部分长蛋白有 vDulab/AF3 预测;
+   ({counts["afdb_max_length"]:,} aa)。部分长蛋白有
+   LocalAF2_PomBaseDiffAFdb/AF3_LongProt 预测;
    sib1 只有 1-702 片段、B5BP45-49 无结构,均排除出分析。
 5. **PAE 配对**:AFdb 结构 {counts["afdb_entries"]:,} 个,PAE 文件 {counts["pae_entries"]:,} 个;
    结构无 PAE {counts["afdb_accessions_without_pae"]:,} 个,PAE 无结构

@@ -7,12 +7,14 @@ from src.registry import (
     AFDB_ALTERNATE,
     AFDB_PRIMARY,
     AFDB_SEQUENCE_MATCH,
-    VDULAB_SOURCE,
+    LOCAL_AF2_SOURCE,
     _attach_structure,
     _match_prediction,
     _selection_reason,
     build_registry_stats,
 )
+
+PREDICTION_COLUMNS = pd.Index(["gene_systematic_id", "structure_id", "structure_sequence"])
 
 
 def _merged() -> pd.DataFrame:
@@ -61,7 +63,7 @@ def _merged_alternate() -> pd.DataFrame:
     )
 
 
-def test_match_vdulab_requires_sequence_equality() -> None:
+def test_match_local_af2_requires_sequence_equality() -> None:
     merged = _merged()
     matched = _match_prediction(merged, ["A", "B"], {"geneA": "AAA", "geneB": "TTT"})
     assert matched.to_dict("records") == [
@@ -88,7 +90,7 @@ def test_attach_structure_marks_missing_accession_as_sequence_match() -> None:
         pombase_accession=[None, "B"],
         selection_reason=[AFDB_PRIMARY, AFDB_ALTERNATE],
     )
-    empty = pd.DataFrame(columns=["gene_systematic_id", "structure_id", "structure_sequence"])
+    empty = pd.DataFrame(columns=PREDICTION_COLUMNS)
     result = _attach_structure(
         registry,
         empty,
@@ -99,12 +101,12 @@ def test_attach_structure_marks_missing_accession_as_sequence_match() -> None:
     assert source.loc["geneA"] == AFDB_SEQUENCE_MATCH
 
 
-def test_selection_reason_falls_back_to_vdulab_and_af3() -> None:
+def test_selection_reason_falls_back_to_local_af2_and_af3() -> None:
     merged = _merged()
     empty = pd.DataFrame({"gene_systematic_id": []})
-    vdulab = pd.DataFrame({"gene_systematic_id": ["geneB"]})
-    reasons = _selection_reason(merged, vdulab, empty)
-    assert reasons.tolist() == [AFDB_PRIMARY, VDULAB_SOURCE]
+    local_af2 = pd.DataFrame({"gene_systematic_id": ["geneB"]})
+    reasons = _selection_reason(merged, local_af2, empty)
+    assert reasons.tolist() == [AFDB_PRIMARY, LOCAL_AF2_SOURCE]
 
     af3 = pd.DataFrame({"gene_systematic_id": ["geneB"]})
     reasons = _selection_reason(merged, empty, af3)
@@ -116,11 +118,11 @@ def test_attach_structure_assigns_source_and_paths() -> None:
         selection_reason=[AFDB_PRIMARY, AFDB_ALTERNATE],
         relationship=[None, None],
     )
-    vdulab = pd.DataFrame(columns=["gene_systematic_id", "structure_id", "structure_sequence"])
-    af3 = pd.DataFrame(columns=["gene_systematic_id", "structure_id", "structure_sequence"])
+    local_af2 = pd.DataFrame(columns=PREDICTION_COLUMNS)
+    af3 = pd.DataFrame(columns=PREDICTION_COLUMNS)
     result = _attach_structure(
         registry,
-        vdulab,
+        local_af2,
         af3,
         v4_sequences={"A": "AAA", "B": "CCD"},
     )
@@ -138,7 +140,7 @@ def test_build_registry_stats_counts_downstream_sources() -> None:
     registry = pd.DataFrame(
         {
             "in_analysis": [True, True, True, False],
-            "structure_source": [VDULAB_SOURCE, AF3_SOURCE, VDULAB_SOURCE, "none"],
+            "structure_source": [LOCAL_AF2_SOURCE, AF3_SOURCE, LOCAL_AF2_SOURCE, "none"],
             "sequence_category": [
                 "substitution_only",
                 "not_compared",
@@ -147,9 +149,9 @@ def test_build_registry_stats_counts_downstream_sources() -> None:
             ],
             "category": ["shared", "shared", "pombase_only", "afdb_only"],
             "selection_reason": [
-                VDULAB_SOURCE,
+                LOCAL_AF2_SOURCE,
                 AF3_SOURCE,
-                VDULAB_SOURCE,
+                LOCAL_AF2_SOURCE,
                 "excluded_prediction_sequence_mismatch",
             ],
             "ted_ecod_coordinate_ok": [True, False, True, False],
@@ -159,9 +161,9 @@ def test_build_registry_stats_counts_downstream_sources() -> None:
     assert stats == {
         "in_analysis": 3,
         "nonidentical_shared": 1,
-        "vdulab_total": 2,
-        "vdulab_nonidentical": 1,
-        "vdulab_long": 1,
+        "local_af2_total": 2,
+        "local_af2_nonidentical": 1,
+        "local_af2_long": 1,
         "af3_total": 1,
         "excluded_prediction_sequence_mismatch": 1,
         "ted_ecod_coordinate_ok": 2,

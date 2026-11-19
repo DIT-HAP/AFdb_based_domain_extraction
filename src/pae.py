@@ -40,7 +40,7 @@ from src.registry import (
     AFDB_ALTERNATE,
     AFDB_PRIMARY,
     AFDB_SEQUENCE_MATCH,
-    VDULAB_SOURCE,
+    LOCAL_AF2_SOURCE,
 )
 
 # =============================================================================
@@ -48,13 +48,14 @@ from src.registry import (
 # =============================================================================
 DOMAIN_SUFFIX = ".domain"
 VERSION_SEPARATOR = "-F1-"
+VERSION_MARKERS = ("model_", "predicted_aligned_error_")
 REGISTRY_REQUIRED = ["gene_systematic_id", "in_analysis", "pae_path", "structure_source"]
 SOURCE_TAGS = {
     AFDB_PRIMARY: "AFDBv6",
     AFDB_SEQUENCE_MATCH: "AFDBv6",
     AFDB_ALTERNATE: "AFDBv6",
-    VDULAB_SOURCE: "vDulab",
-    AF3_SOURCE: "vAF3",
+    LOCAL_AF2_SOURCE: "LocalAF2_PomBaseDiffAFdb",
+    AF3_SOURCE: "AF3_LongProt",
 }
 
 
@@ -139,9 +140,13 @@ def read_subset(path: Path) -> set[str]:
 def parse_domain_filename(name: str) -> tuple[str, str]:
     """Extract the protein identifier and model version from a ``.domain`` name."""
     stem = name.removesuffix(DOMAIN_SUFFIX)
-    identifier = stem.split(VERSION_SEPARATOR)[0].removeprefix("AF-")
-    version = stem.rsplit("_", 1)[1]
-    return identifier, version
+    identifier, separator, remainder = stem.partition(VERSION_SEPARATOR)
+    if not separator:
+        raise ValueError(f"Unrecognised domain filename: {name}")
+    for marker in VERSION_MARKERS:
+        if remainder.startswith(marker):
+            return identifier.removeprefix("AF-"), remainder.removeprefix(marker)
+    raise ValueError(f"Unrecognised domain filename: {name}")
 
 
 def build_domain_table(domains_dir: Path, output_path: Path, id_column: str = "uniprot_id") -> None:

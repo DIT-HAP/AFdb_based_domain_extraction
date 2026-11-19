@@ -15,7 +15,7 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
   gene (plus the AFdb-only entries), recording the selected structure, PAE
   matrix, modelled sequence, coordinate basis, and analysis flag.
 - `results/04_registry/03_registry_stats.tsv` — downstream counts derived from
-  the registry (vDulab, AF3, and TED/ECOD coverage).
+  the registry (LocalAF2_PomBaseDiffAFdb, AF3_LongProt, and TED/ECOD coverage).
 - `results/10_segments.tsv` — the canonical unified segment table with
   three sources: `PAE`, `TED`, `ECOD`.
 - `results/03_comparison/` — the detailed AFdb-vs-PomBase tables, report,
@@ -24,9 +24,9 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
 `docs/results_index.md` numbers every output file, its row count, the producing
 rule (`R#`), and the script (`S#`).
 
-The legacy per-dataset outputs (`AFDB_v4`, `vDulab`, `vDulab2`, `AF3`,
-`DY47073`) are retained as the v1 regression baseline and are disabled by
-default.
+The legacy per-dataset outputs (`AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
+`LocalAF2_DY47073Annotation`, `AF3_LongProt`, `DY47073_ProteinSubset`) are
+retained as the v1 regression baseline and are disabled by default.
 
 Segment coordinates are **1-based inclusive**; `length = end - start + 1`.
 

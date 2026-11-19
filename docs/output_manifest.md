@@ -18,7 +18,8 @@ baseline. Nothing is deleted from it.
 | TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | Regenerated as `resources/ted/pombe_ted_segments.tsv` from the raw dump |
 | ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | Regenerated into `resources/ecod/` |
 
-Datasets covered: `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, `DY47073`.
+Datasets covered: `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
+`LocalAF2_DY47073Annotation`, `AF3_LongProt`, `DY47073_ProteinSubset`.
 
 ## New in v2
 
@@ -51,13 +52,15 @@ Datasets covered: `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, `DY47073`.
    AFDB v4 reformatted/annotated tables (9 extra rows). v2 de-duplicates; the
    residue intervals and `fraction_gt_70` match exactly.
 2. **Rounding drift.** The confident-domain table drifts by ±0.01
-   `mean_pLDDT` on 45 rows. `vDulab` and `vDulab2` drift on 2–3 rows each,
-   and AFDB v4 drifts on 68 of 17,851 rows. All residue intervals, lengths,
-   `fraction_gt_70`, locations and domain types match; AF3 matches exactly on
-   every field.
-3. **Duplicate legacy inputs.** The v1 `vDulab` tables came from
-   `20240305_predicted_results`, not from the later renamed release. v2 pins
-   the 2024-03-05 directory; the 45 sequence-consistent models are copied to
+   `mean_pLDDT` on 45 rows. `LocalAF2_PomBaseDiffAFdb` and
+   `LocalAF2_DY47073Annotation` drift on 2–3 rows each, and AFDB v4 drifts on
+   68 of 17,851 rows. All residue intervals, lengths, `fraction_gt_70`,
+   locations and domain types match; AF3_LongProt matches exactly on every
+   field.
+3. **Duplicate legacy inputs.** The v1 `vDulab` tables (now
+   LocalAF2_PomBaseDiffAFdb) came from `20240305_predicted_results`, not from
+   the later renamed release. v2 pins the 2024-03-05 directory; the 45
+   sequence-consistent models are copied to
    `predictions/LocalAF2_PomBaseDiffAFdb_20240305` on hugedata.
 4. **Column order.** v2 writes `domain_id/domain_residues` before
    `protein_length`; values are identical.

@@ -3,8 +3,8 @@
 # Scans the pinned AFdb v6 CIF headers and PAE filenames once, then joins them
 # into the single entry table consumed by the comparison and registry stages.
 
-AFDB_CIF_DIR = resolve(config["resources"]["registry"]["afdb_dir"])
-AFDB_PAE_DIR = resolve(config["resources"]["registry"]["afdb_pae_dir"])
+AFDB_CIF_DIR = resolve(config["datasets"]["AFDB_v6"]["structure"])
+AFDB_PAE_DIR = resolve(config["datasets"]["AFDB_v6"]["pae"])
 
 
 rule afdb_cif_entries:

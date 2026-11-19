@@ -47,7 +47,7 @@ import numpy as np
 import pandas as pd
 
 from src.afdb import read_cif_header_sequence
-from src.files import AppConfig, read_tsv, require_columns, write_tsv
+from src.files import AppConfig, DatasetConfig, read_tsv, require_columns, write_tsv
 
 # =============================================================================
 # 2. CONSTANTS & COLUMN CONTRACTS
@@ -56,14 +56,10 @@ CIF_NAME_PATTERN = re.compile(r"^AF-(?P<accession>.+)-F\d+-model_[^.]+\.cif(?:\.
 AFDB_PRIMARY = "AFDB_v6_primary"
 AFDB_SEQUENCE_MATCH = "AFDB_v6_sequence_match"
 AFDB_ALTERNATE = "AFDB_v6_alternate"
-VDULAB_SOURCE = "vDulab"
-AF3_SOURCE = "AF3"
-VDULAB_VERSION = "LocalAF2_PomBaseDiffAFdb_20240305"
-AF3_VERSION = "AF3_LongProt_20241101"
-VDULAB_STRUCTURE_PREFIX = f"reference:predictions/{VDULAB_VERSION}/structure/AF-"
-VDULAB_PAE_PREFIX = f"reference:predictions/{VDULAB_VERSION}/pae/AF-"
-AF3_STRUCTURE_PREFIX = f"reference:predictions/{AF3_VERSION}/structure/AF-"
-AF3_PAE_PREFIX = f"reference:predictions/{AF3_VERSION}/pae/AF-"
+AFDB_V6_KEY = "AFDB_v6"
+AFDB_V4_KEY = "AFDB_v4"
+LOCAL_AF2_SOURCE = "LocalAF2_PomBaseDiffAFdb"
+AF3_SOURCE = "AF3_LongProt"
 NO_SOURCE = "none"
 NONIDENTICAL_CATEGORIES = ("substitution_only", "indel_only", "both")
 EXCLUSION_REASONS = {
@@ -156,10 +152,6 @@ class RegistryPaths:
     """Immutable paths and release labels for a registry build."""
 
     merged_table: Path
-    afdb_v4_dir: Path
-    vdulab_structure_dir: Path
-    vdulab_fasta_dir: Path
-    af3_structure_dir: Path
     output: Path
     summary_output: Path
     stats_output: Path
@@ -282,7 +274,7 @@ def _selection_reason(
         "afdb_only_not_analysed",
         AFDB_PRIMARY,
         AFDB_ALTERNATE,
-        VDULAB_SOURCE,
+        LOCAL_AF2_SOURCE,
         AF3_SOURCE,
         "excluded_partial_structure",
         "excluded_no_structure",
@@ -321,10 +313,10 @@ def _attach_structure(
             is_primary & ~is_sequence_match,
             is_sequence_match,
             result["selection_reason"].eq(AFDB_ALTERNATE),
-            result["selection_reason"].eq(VDULAB_SOURCE),
+            result["selection_reason"].eq(LOCAL_AF2_SOURCE),
             result["selection_reason"].eq(AF3_SOURCE),
         ],
-        [AFDB_PRIMARY, AFDB_SEQUENCE_MATCH, AFDB_ALTERNATE, VDULAB_SOURCE, AF3_SOURCE],
+        [AFDB_PRIMARY, AFDB_SEQUENCE_MATCH, AFDB_ALTERNATE, LOCAL_AF2_SOURCE, AF3_SOURCE],
         default=NO_SOURCE,
     )
     result["modeled_length"] = result["structure_sequence"].str.len().astype("Int64")
@@ -332,7 +324,7 @@ def _attach_structure(
         [
             result["structure_source"].isin([AFDB_PRIMARY, AFDB_SEQUENCE_MATCH]),
             result["structure_source"].eq(AFDB_ALTERNATE),
-            result["structure_source"].isin([VDULAB_SOURCE, AF3_SOURCE]),
+            result["structure_source"].isin([LOCAL_AF2_SOURCE, AF3_SOURCE]),
         ],
         ["UniProt", "PomBase", "PomBase"],
         default="",
@@ -351,30 +343,37 @@ def _attach_structure(
     return result
 
 
-def _attach_paths(registry: pd.DataFrame) -> pd.DataFrame:
+def _attach_paths(
+    registry: pd.DataFrame,
+    datasets: dict[str, DatasetConfig],
+) -> pd.DataFrame:
     """Build config-resolvable structure and PAE paths for each selected source."""
     structure_id = registry["structure_id"]
     source = registry["structure_source"]
     is_afdb = source.isin([AFDB_PRIMARY, AFDB_SEQUENCE_MATCH, AFDB_ALTERNATE])
-    is_vdulab = source.eq(VDULAB_SOURCE)
+    is_local_af2 = source.eq(LOCAL_AF2_SOURCE)
     is_af3 = source.eq(AF3_SOURCE)
+    afdb = datasets[AFDB_V6_KEY]
+    local_af2 = datasets[LOCAL_AF2_SOURCE]
+    af3 = datasets[AF3_SOURCE]
     registry["structure_path"] = np.select(
-        [is_afdb, is_vdulab, is_af3],
+        [is_afdb, is_local_af2, is_af3],
         [
-            "reference:UP000002485_284812_SCHPO_v6/AF-" + structure_id + "-F1-model_v6.cif.gz",
-            VDULAB_STRUCTURE_PREFIX + structure_id + f"-F1-model_{VDULAB_VERSION}.pdb.gz",
-            AF3_STRUCTURE_PREFIX + structure_id + f"-F1-model_{AF3_VERSION}.cif",
+            afdb.structure + "/AF-" + structure_id + f"-F1-model_{afdb.version}.cif.gz",
+            local_af2.structure + "/AF-" + structure_id + f"-F1-model_{local_af2.version}.pdb.gz",
+            af3.structure + "/AF-" + structure_id + f"-F1-model_{af3.version}.cif",
         ],
         default="",
     )
     registry["pae_path"] = np.select(
-        [is_afdb, is_vdulab, is_af3],
+        [is_afdb, is_local_af2, is_af3],
         [
-            "reference:PAE/UP000002485_284812_SCHPO_v6/AF-"
+            afdb.pae + "/AF-" + structure_id + f"-F1-predicted_aligned_error_{afdb.version}.json",
+            local_af2.pae
+            + "/AF-"
             + structure_id
-            + "-F1-predicted_aligned_error_v6.json",
-            VDULAB_PAE_PREFIX + structure_id + f"-F1-predicted_aligned_error_{VDULAB_VERSION}.json",
-            AF3_PAE_PREFIX + structure_id + f"-F1-predicted_aligned_error_{AF3_VERSION}.json",
+            + f"-F1-predicted_aligned_error_{local_af2.version}.json",
+            af3.pae + "/AF-" + structure_id + f"-F1-predicted_aligned_error_{af3.version}.json",
         ],
         default="",
     )
@@ -389,13 +388,13 @@ def build_registry_stats(registry: pd.DataFrame) -> pd.DataFrame:
     metrics = {
         "in_analysis": int(in_analysis.sum()),
         "nonidentical_shared": int((is_nonidentical & registry["category"].eq("shared")).sum()),
-        "vdulab_total": int((source.eq(VDULAB_SOURCE) & in_analysis).sum()),
-        "vdulab_nonidentical": int(
-            (source.eq(VDULAB_SOURCE) & in_analysis & is_nonidentical).sum()
+        "local_af2_total": int((source.eq(LOCAL_AF2_SOURCE) & in_analysis).sum()),
+        "local_af2_nonidentical": int(
+            (source.eq(LOCAL_AF2_SOURCE) & in_analysis & is_nonidentical).sum()
         ),
-        "vdulab_long": int(
+        "local_af2_long": int(
             (
-                source.eq(VDULAB_SOURCE)
+                source.eq(LOCAL_AF2_SOURCE)
                 & in_analysis
                 & registry["sequence_category"].eq("not_compared")
             ).sum()
@@ -433,18 +432,30 @@ def build_registry(config: RegistryPaths, app_config: AppConfig) -> None:
     registry = read_tsv(config.merged_table)
     require_columns(registry, MERGED_REQUIRED, config.merged_table)
 
-    v4_sequences = load_cif_sequences(config.afdb_v4_dir)
-    af3_sequences = load_cif_sequences(config.af3_structure_dir)
-    vdulab_sequences = load_gene_fastas(config.vdulab_fasta_dir)
-    vdulab_stems = load_structure_ids(config.vdulab_structure_dir, "pdb.gz", VDULAB_VERSION)
-    af3_stems = load_structure_ids(config.af3_structure_dir, "cif", AF3_VERSION)
+    datasets = app_config.datasets
+    afdb_v4_dataset = datasets[AFDB_V4_KEY]
+    local_af2_dataset = datasets[LOCAL_AF2_SOURCE]
+    af3_dataset = datasets[AF3_SOURCE]
+    fasta_spec = local_af2_dataset.fasta
+    if fasta_spec is None:
+        raise ValueError(f"{LOCAL_AF2_SOURCE} requires a fasta path in config")
+
+    v4_sequences = load_cif_sequences(app_config.resolve(afdb_v4_dataset.structure))
+    af3_sequences = load_cif_sequences(app_config.resolve(af3_dataset.structure))
+    vdulab_sequences = load_gene_fastas(app_config.resolve(fasta_spec))
+    vdulab_stems = load_structure_ids(
+        app_config.resolve(local_af2_dataset.structure), "pdb.gz", local_af2_dataset.version
+    )
+    af3_stems = load_structure_ids(
+        app_config.resolve(af3_dataset.structure), "cif", af3_dataset.version
+    )
 
     vdulab = _match_prediction(registry, vdulab_stems, vdulab_sequences)
     af3 = _match_prediction(registry, af3_stems, af3_sequences, sequence_key="uniprot_id")
 
     registry["selection_reason"] = _selection_reason(registry, vdulab, af3)
     registry = _attach_structure(registry, vdulab, af3, v4_sequences)
-    registry = _attach_paths(registry)
+    registry = _attach_paths(registry, datasets)
     _validate_selection(registry, app_config)
 
     output = registry[REGISTRY_COLUMNS].sort_values("gene_systematic_id", ignore_index=True)

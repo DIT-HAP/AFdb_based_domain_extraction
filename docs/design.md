@@ -14,9 +14,11 @@ role instead of pinning one global release:
 | TED | Zenodo 13908086 | Domain assignments |
 | ECOD | `dpam_v5` | Domain assignments |
 
-The legacy `AFDB_v4`, `vDulab`, `vDulab2`, `AF3`, and `DY47073` datasets are
-declared but disabled; they remain as the v1 regression baseline. The
-canonical output comes from the gene structure registry.
+The legacy `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`, `LocalAF2_DY47073Annotation`,
+`AF3_LongProt`, and `DY47073_ProteinSubset` datasets are declared but disabled;
+they remain as the v1 regression baseline. The canonical output comes from the
+gene structure registry. Older documents call these datasets `vDulab`,
+`vDulab2`, and `AF3`.
 
 ## Gene structure registry
 
@@ -28,8 +30,8 @@ exact sequence match exists:
 | Rule | Genes |
 |---|---:|
 | Sequence-identical AFdb v6 entry | 5,071 (4,999 own accession + 63 alternate + 9 without an AFdb entry at their accession) |
-| vDulab prediction whose input equals PomBase | 45 (37 non-identical + 8 long proteins) |
-| AF3 prediction (long proteins without vDulab) | 3 (dhc1, tra2, mdn1) |
+| LocalAF2_PomBaseDiffAFdb prediction whose input equals PomBase | 45 (37 non-identical + 8 long proteins) |
+| AF3_LongProt prediction (long proteins without a local AF2 model) | 3 (dhc1, tra2, mdn1) |
 | Excluded | 7 genes (SPCC569.03, sib1, B5BP45-49) + 16 AFdb-only rows |
 | Unselected AFdb entries | 92 (63 superseded by a sequence match, 13 duplicates, 16 no PomBase match) |
 
@@ -52,7 +54,7 @@ marks the coordinate basis as PomBase.
 
 Python dependencies are pinned in `workflow/envs/core.yaml`. The critical pin
 is `python-igraph=0.11.4`: version 1.0 produces a different Leiden partition
-(AF3 yielded 181 domains instead of 171). `pandas=2.2.3`, `numpy=1.26.4`, and
+(AF3_LongProt yielded 181 domains instead of 171). `pandas=2.2.3`, `numpy=1.26.4`, and
 `biopython=1.85` are the versions that reproduced the legacy tables exactly.
 
 ## Workflow layout
@@ -85,12 +87,12 @@ inventory; PAE files without a CIF entry are reported and ignored.
 
 - `resources/` holds small PomBase-only inputs that the pipeline reads directly
   and that are committed: PomBase tables, the TED/ECOD PomBase subsets, the
-  DY47073 protein subset, and the provenance manifest.
+  DY47073_ProteinSubset input, and the provenance manifest.
 - Raw upstream dumps live under the reference root
-  (`/hugedata/YushengYang/AFdb/TED` and `ECOD`): the 128G TED domain summary,
-  the 27G TED per-chain segmentation, and the 31M ECOD dump. AlphaFold
-  structures and PAE stay in the cache. `config/config.yaml` points at them;
-  nothing large is committed.
+  (`/hugedata/YushengYang/AFdb`): the 128G TED domain summary, the 27G TED
+  per-chain segmentation, the 31M ECOD dump, and the AlphaFold structures,
+  PAE, and selected predictions. `config/config.yaml` points at them; nothing
+  large is committed.
 - `ted-pombe` and `ecod-pombe` stream the raw dumps and write the PomBase
   subsets into `resources/`, so the extraction is reproducible from the
   workflow alone.
@@ -121,8 +123,8 @@ segment_class, family, location
 - The three sources are concatenated, not inner-joined, because only 4,216 of
   the 5,128 AFDB proteins have both TED and ECOD assignments.
 - TED and ECOD are filtered to the proteins predicted by the dataset. A
-  vDulab2 table (71 proteins) therefore has 700 rows, not the 22k rows of a
-  full-proteome table.
+  LocalAF2_DY47073Annotation table (71 proteins) therefore has 700 rows, not
+  the 22k rows of a full-proteome table.
 
 ## Scope
 
@@ -137,9 +139,9 @@ segment_class, family, location
 
 | Dataset | Result |
 |---|---|
-| AF3 | Exact match on all four PAE tables |
-| vDulab2 | Exact on intervals, lengths, fractions, types; 2 rows differ by ±0.01 mean_pLDDT |
-| vDulab | Exact on the same fields; 3 rows differ by ±0.01 mean_pLDDT (after pinning the 2024-03-05 input release) |
+| AF3_LongProt | Exact match on all four PAE tables |
+| LocalAF2_DY47073Annotation | Exact on intervals, lengths, fractions, types; 2 rows differ by ±0.01 mean_pLDDT |
+| LocalAF2_PomBaseDiffAFdb | Exact on the same fields; 3 rows differ by ±0.01 mean_pLDDT (after pinning the 2024-03-05 input release) |
 | AFDB v4 | PAE and pLDDT tables exact; 17,851 unique domains after removing 9 duplicate legacy rows; 68 rows differ by ±0.01 mean_pLDDT; 42 rows differ only by the intended UniProt fallback in `Systematic ID` |
 | confident-domains | 20,554 unique rows match the legacy table; the legacy file duplicated 3 proteins and drifted by ±0.01 on 45 rows |
 
@@ -173,8 +175,9 @@ falling back to the UniProt accession. The comparison and registry were rerun:
   (63 superseded old entries + 9 genes without an AFdb entry at their accession).
 - 92 unselected AFdb entries: 63 superseded, 13 duplicates, 16 no PomBase match.
 - 17 PomBase-only genes; merged table still 5,142 rows.
-- Registry `in_analysis` remains 5,119 (5,071 AFdb + 45 vDulab + 3 AF3); hht3
-  moves from vDulab to the sequence-identical AFdb entry P09988.
+- Registry `in_analysis` remains 5,119 (5,071 AFdb + 45
+  LocalAF2_PomBaseDiffAFdb + 3 AF3_LongProt); hht3 moves from
+  LocalAF2_PomBaseDiffAFdb to the sequence-identical AFdb entry P09988.
 - The Excel workbook gains an `afdb_only_superseded` sheet.
 
 The earlier byte-identical stage-split check was performed before this matching

@@ -29,13 +29,6 @@ resources:
   uniprot:
     triangulation: "project:resources/uniprot/uniprot_triangulation_2026-06-01.tsv"
     resolution: "project:resources/uniprot/uniprot_resolution.tsv"
-  registry:
-    afdb_dir: "reference:UP000002485_284812_SCHPO_v6"
-    afdb_pae_dir: "reference:PAE/UP000002485_284812_SCHPO_v6"
-    afdb_v4_dir: "reference:UP000002485_284812_SCHPO_v4"
-    vdulab_structure_dir: "reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/structure"
-    vdulab_fasta_dir: "reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/input_fasta"
-    af3_structure_dir: "reference:predictions/AF3_LongProt_20241101/structure"
   ted:
     release: "zenodo13908086"
     filtered_dump: "reference:TED/ted_365m.domain_summary.cath.globularity.taxid.tsv"
@@ -43,6 +36,47 @@ resources:
   ecod:
     release: "dpam_v5"
     dump: "reference:ECOD/af2_eukaryotes.dpam_v5.domains.txt"
+
+# =============================================================================
+# Datasets
+# -----------------------------------------------------------------------------
+# One entry per structure/PAE dataset. Keys are the dataset labels used by the
+# registry and the legacy per-dataset rules; `version` is the provenance tag
+# recorded in source_version and file names. Paths use the resource prefixes.
+# =============================================================================
+datasets:
+  AFDB_v6:
+    version: "v6"
+    structure: "reference:UP000002485_284812_SCHPO_v6"
+    pae: "reference:PAE/UP000002485_284812_SCHPO_v6"
+  AFDB_v4:
+    version: "AFDB_v4_20230708"
+    structure: "reference:UP000002485_284812_SCHPO_v4"
+    pae: "reference:PAE/UP000002485_284812_SCHPO_v4"
+    gene_table: "project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"
+    enabled: false
+  LocalAF2_PomBaseDiffAFdb:
+    version: "LocalAF2_PomBaseDiffAFdb_20240305"
+    structure: "reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/structure"
+    pae: "reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/pae"
+    fasta: "reference:predictions/LocalAF2_PomBaseDiffAFdb_20240305/input_fasta"
+    gene_table: "project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"
+    enabled: false
+  LocalAF2_DY47073Annotation: &local_af2_dy47073
+    version: "LocalAF2_DY47073Annotation_20240904"
+    structure: "raw:20240904_formated_results_vDulab2_noNaN/vDulab2"
+    pae: "raw:20240904_formated_results_vDulab2_noNaN/PAE_files"
+    gene_table: "project:resources/pombase/2023-07-01/gene_IDs_names_products.tsv"
+    enabled: false
+  AF3_LongProt:
+    version: "AF3_LongProt_20241101"
+    structure: "reference:predictions/AF3_LongProt_20241101/structure"
+    pae: "reference:predictions/AF3_LongProt_20241101/pae"
+    gene_table: "raw:20241101_AF3_output/AF3_gene_IDs_names_products.tsv"
+    enabled: false
+  DY47073_ProteinSubset:
+    <<: *local_af2_dy47073
+    protein_subset: "project:resources/dy47073/protein_subset.txt"
 
 # =============================================================================
 # Pipeline parameters

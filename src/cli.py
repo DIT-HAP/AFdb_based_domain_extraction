@@ -210,10 +210,6 @@ def refresh_uniprot_resolution(
 @app.command("build-registry")
 def build_registry_command(
     merged_table: Path = typer.Option(..., help="Comparison merged table."),
-    afdb_v4_dir: Path = typer.Option(..., help="AFdb v4 CIF directory for TED/ECOD coordinates."),
-    vdulab_structure_dir: Path = typer.Option(..., help="vDulab structure directory."),
-    vdulab_fasta_dir: Path = typer.Option(..., help="vDulab input FASTA directory."),
-    af3_structure_dir: Path = typer.Option(..., help="AF3 structure directory."),
     output: Path = typer.Option(..., help="Registry output table."),
     summary_output: Path = typer.Option(..., help="Selection summary output table."),
     stats_output: Path = typer.Option(..., help="Downstream statistics output table."),
@@ -222,10 +218,6 @@ def build_registry_command(
     """Build the per-gene structure registry."""
     paths = RegistryPaths(
         merged_table=merged_table,
-        afdb_v4_dir=afdb_v4_dir,
-        vdulab_structure_dir=vdulab_structure_dir,
-        vdulab_fasta_dir=vdulab_fasta_dir,
-        af3_structure_dir=af3_structure_dir,
         output=output,
         summary_output=summary_output,
         stats_output=stats_output,

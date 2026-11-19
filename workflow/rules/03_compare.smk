@@ -3,7 +3,7 @@
 # Consumes the AFdb entry inventory and the pinned UniProt snapshots, and
 # writes the detailed comparison tables, report, and workbook.
 
-AFDB_SOURCE = resolve(config["resources"]["registry"]["afdb_dir"])
+AFDB_SOURCE = resolve(config["datasets"]["AFDB_v6"]["structure"])
 
 
 rule compare_afdb_pombase:
