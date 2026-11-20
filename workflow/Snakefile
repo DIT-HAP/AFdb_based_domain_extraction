@@ -6,8 +6,8 @@ Root Snakefile: configuration roots, shared result path constants, stage
 includes, and the default target.
 
 Rules live in ``workflow/rules/<nn>_<stage>.smk``, one file per pipeline stage:
-AFdb extraction, UniProt refresh, comparison, registry, curated chain, TED/ECOD
-subsets, and the optional DNA branch.
+AFdb extraction, UniProt refresh, comparison, registry, PAE clustering, pLDDT,
+domain merging, TED/ECOD subsets, unification, and the two optional branches.
 
 Input
 -----
@@ -95,9 +95,13 @@ include: "rules/01_afdb.smk"
 include: "rules/02_uniprot.smk"
 include: "rules/03_compare.smk"
 include: "rules/04_registry.smk"
-include: "rules/05_curated.smk"
-include: "rules/06_external.smk"
-include: "rules/07_dna.smk"
+include: "rules/05_pae.smk"
+include: "rules/06_plddt.smk"
+include: "rules/07_domains.smk"
+include: "rules/08_external.smk"
+include: "rules/09_unify.smk"
+include: "rules/10_confident.smk"
+include: "rules/11_dna.smk"
 
 
 rule all:

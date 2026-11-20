@@ -8,7 +8,7 @@ Four numbering schemes are used:
 - `#n` — output file or directory; the number is also the on-disk filename
   prefix (`01_afdb/`, `04_registry/`, ...).
 - `Rn` — Snakemake rule (Appendix A); rule files are numbered
-  `workflow/rules/01_afdb.smk`–`07_dna.smk`.
+  `workflow/rules/01_afdb.smk`–`11_dna.smk`.
 - `Sn` — script or Python module (Appendix B).
 - `Dn` — dataset declaration (Appendix C), defined in the `datasets` block of
   `config/config.yaml` and loaded by `src/files.py`.
@@ -178,19 +178,19 @@ acceptance criteria.
 | R5 | `refresh_uniprot_resolution` | `rules/02_uniprot.smk` | `refresh-uniprot-resolution` | S1, S3, S13 | #2.2 |
 | R6 | `compare_afdb_pombase` | `rules/03_compare.smk` | `compare_afdb_pombase.py` | S2 | #3 |
 | R7 | `build_registry` | `rules/04_registry.smk` | `build-registry` | S1, S3, S5 | #4.1, #4.2, #4.3 |
-| R8 | `registry_pae_to_domains` | `rules/05_curated.smk` | `registry-pae-to-domains` | S1, S3, S6 | #5 |
-| R9 | `registry_domains_to_table` | `rules/05_curated.smk` | `registry-domains-to-table` | S1, S3, S6 | #6 |
-| R10 | `registry_extract_plddt` | `rules/05_curated.smk` | `registry-extract-plddt` | S1, S3, S7 | #7 |
-| R11 | `registry_merge_domains` | `rules/05_curated.smk` | `registry-merge-domains` | S1, S3, S8 | #8 |
-| R12 | `registry_assign_type` | `rules/05_curated.smk` | `assign-type` | S1, S3, S8 | #9 |
-| R13 | `registry_unify_segments` | `rules/05_curated.smk` | `registry-unify-segments` | S1, S3, S9 | #10 |
-| R14 | `registry_confident_domains` | `rules/05_curated.smk` | `registry-confident-domains` | S1, S3, S8 | `results/11_confident_domains.tsv` |
-| R15 | `ted_pombe` | `rules/06_external.smk` | `ted-pombe` | S1, S3, S10 | `resources/ted/pombe_ted_segments.tsv` |
-| R16 | `ecod_pombe` | `rules/06_external.smk` | `ecod-pombe` | S1, S3, S10 | `resources/ecod/pombe_ecod_segments.tsv` |
-| R17 | `dna_bed` | `rules/07_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
-| R18 | `dna_map` | `rules/07_dna.smk` | `dna-map` | S1, S3, S11 | `12_dna/DNA_domain.tsv` |
-| R19 | `dna_organize` | `rules/07_dna.smk` | `dna-organize` | S1, S3, S11 | `12_dna/merged_DNA_domain.tsv` |
-| R20 | `dna_genome_bed` | `rules/07_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `12_dna/domains.bed` |
+| R8 | `registry_pae_to_domains` | `rules/05_pae.smk` | `registry-pae-to-domains` | S1, S3, S6 | #5 |
+| R9 | `registry_domains_to_table` | `rules/05_pae.smk` | `registry-domains-to-table` | S1, S3, S6 | #6 |
+| R10 | `registry_extract_plddt` | `rules/06_plddt.smk` | `registry-extract-plddt` | S1, S3, S7 | #7 |
+| R11 | `registry_merge_domains` | `rules/07_domains.smk` | `registry-merge-domains` | S1, S3, S8 | #8 |
+| R12 | `registry_assign_type` | `rules/07_domains.smk` | `assign-type` | S1, S3, S8 | #9 |
+| R13 | `registry_unify_segments` | `rules/09_unify.smk` | `registry-unify-segments` | S1, S3, S9 | #10 |
+| R14 | `registry_confident_domains` | `rules/10_confident.smk` | `registry-confident-domains` | S1, S3, S8 | `results/11_confident_domains.tsv` |
+| R15 | `ted_pombe` | `rules/08_external.smk` | `ted-pombe` | S1, S3, S10 | `resources/ted/pombe_ted_segments.tsv` |
+| R16 | `ecod_pombe` | `rules/08_external.smk` | `ecod-pombe` | S1, S3, S10 | `resources/ecod/pombe_ecod_segments.tsv` |
+| R17 | `dna_bed` | `rules/11_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
+| R18 | `dna_map` | `rules/11_dna.smk` | `dna-map` | S1, S3, S11 | `12_dna/DNA_domain.tsv` |
+| R19 | `dna_organize` | `rules/11_dna.smk` | `dna-organize` | S1, S3, S11 | `12_dna/merged_DNA_domain.tsv` |
+| R20 | `dna_genome_bed` | `rules/11_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `12_dna/domains.bed` |
 
 ## Appendix B — Script index
 

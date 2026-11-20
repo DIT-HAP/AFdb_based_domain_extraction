@@ -68,9 +68,13 @@ Rules are grouped by pipeline stage, one file per stage, in `workflow/rules/`:
 | `02_uniprot.smk` | Manual UniProt snapshot refresh (not in `rule all`) |
 | `03_compare.smk` | AFdb vs PomBase comparison |
 | `04_registry.smk` | Gene structure registry |
-| `05_curated.smk` | PAE clustering through unified segments, plus the confident-domain caller |
-| `06_external.smk` | TED/ECOD PomBase subsets |
-| `07_dna.smk` | DNA projection branch |
+| `05_pae.smk` | Registry PAE clustering to the domain table |
+| `06_plddt.smk` | Registry pLDDT extraction |
+| `07_domains.smk` | Domain merging and type annotation |
+| `08_external.smk` | TED/ECOD PomBase subsets |
+| `09_unify.smk` | Unified PAE + TED + ECOD segments |
+| `10_confident.smk` | Confident-domain side branch (not in `rule all`) |
+| `11_dna.smk` | DNA projection branch |
 
 The root `Snakefile` holds the configuration, the shared numbered result path
 constants, the stage includes, and `rule all`. The canonical registry reads the
@@ -151,7 +155,8 @@ proteins keep their UniProt accession instead of an empty systematic id.
 
 ## Stage split verification (2026-11-05)
 
-`01_registry.smk` was split into `01_afdb.smk`–`05_curated.smk`, and the
+`01_registry.smk` was split into `01_afdb.smk`–`05_curated.smk` (the curated
+chain has since been split further into `05_pae.smk`–`09_unify.smk`), and the
 comparison script stopped parsing CIF/PAE directories. The front end was rerun
 from `results/01_afdb/03_afdb_entries.tsv`: all seven comparison TSVs, the
 entry-role table, the registry, and the summary are byte-identical to the

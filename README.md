@@ -38,9 +38,13 @@ workflow/rules/01_afdb.smk    AFdb structure inventory
 workflow/rules/02_uniprot.smk UniProt snapshot refresh (manual, not in rule all)
 workflow/rules/03_compare.smk AFdb vs PomBase comparison
 workflow/rules/04_registry.smk Gene structure registry
-workflow/rules/05_curated.smk PAE clustering through unified segments
-workflow/rules/06_external.smk TED/ECOD PomBase subsets
-workflow/rules/07_dna.smk      DNA projection branch
+workflow/rules/05_pae.smk      Registry PAE clustering to the domain table
+workflow/rules/06_plddt.smk    Registry pLDDT extraction
+workflow/rules/07_domains.smk  Domain merging and type annotation
+workflow/rules/08_external.smk TED/ECOD PomBase subsets
+workflow/rules/09_unify.smk    Unified PAE + TED + ECOD segments
+workflow/rules/10_confident.smk Confident-domain side branch
+workflow/rules/11_dna.smk      DNA projection branch
 workflow/envs/                Driver environment and the shared rule environment
 src/                          Functional core + typer CLI
 scripts/afdb_domains.py       Thin executable shell
