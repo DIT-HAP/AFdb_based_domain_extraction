@@ -69,8 +69,8 @@ Rules are grouped by pipeline stage, one file per stage, in `workflow/rules/`:
 | `03_compare.smk` | AFdb vs PomBase comparison |
 | `04_registry.smk` | Gene structure registry |
 | `05_curated.smk` | PAE clustering through unified segments, plus the confident-domain caller |
-| `09_external.smk` | TED/ECOD PomBase subsets |
-| `11_dna.smk` | DNA projection branch |
+| `06_external.smk` | TED/ECOD PomBase subsets |
+| `07_dna.smk` | DNA projection branch |
 
 The root `Snakefile` holds the configuration, the shared numbered result path
 constants, the stage includes, and `rule all`. The canonical registry reads the

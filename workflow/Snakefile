@@ -96,8 +96,8 @@ include: "rules/02_uniprot.smk"
 include: "rules/03_compare.smk"
 include: "rules/04_registry.smk"
 include: "rules/05_curated.smk"
-include: "rules/09_external.smk"
-include: "rules/11_dna.smk"
+include: "rules/06_external.smk"
+include: "rules/07_dna.smk"
 
 
 rule all:

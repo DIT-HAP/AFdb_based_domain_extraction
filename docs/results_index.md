@@ -8,7 +8,7 @@ Four numbering schemes are used:
 - `#n` — output file or directory; the number is also the on-disk filename
   prefix (`01_afdb/`, `04_registry/`, ...).
 - `Rn` — Snakemake rule (Appendix A); rule files are numbered
-  `workflow/rules/01_afdb.smk`–`11_dna.smk` (06–08 and 10 were removed).
+  `workflow/rules/01_afdb.smk`–`07_dna.smk`.
 - `Sn` — script or Python module (Appendix B).
 - `Dn` — dataset declaration (Appendix C), defined in the `datasets` block of
   `config/config.yaml` and loaded by `src/files.py`.
@@ -185,12 +185,12 @@ acceptance criteria.
 | R12 | `registry_assign_type` | `rules/05_curated.smk` | `assign-type` | S1, S3, S8 | #9 |
 | R13 | `registry_unify_segments` | `rules/05_curated.smk` | `registry-unify-segments` | S1, S3, S9 | #10 |
 | R14 | `registry_confident_domains` | `rules/05_curated.smk` | `registry-confident-domains` | S1, S3, S8 | `results/11_confident_domains.tsv` |
-| R15 | `ted_pombe` | `rules/09_external.smk` | `ted-pombe` | S1, S3, S10 | `resources/ted/pombe_ted_segments.tsv` |
-| R16 | `ecod_pombe` | `rules/09_external.smk` | `ecod-pombe` | S1, S3, S10 | `resources/ecod/pombe_ecod_segments.tsv` |
-| R17 | `dna_bed` | `rules/11_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
-| R18 | `dna_map` | `rules/11_dna.smk` | `dna-map` | S1, S3, S11 | `12_dna/DNA_domain.tsv` |
-| R19 | `dna_organize` | `rules/11_dna.smk` | `dna-organize` | S1, S3, S11 | `12_dna/merged_DNA_domain.tsv` |
-| R20 | `dna_genome_bed` | `rules/11_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `12_dna/domains.bed` |
+| R15 | `ted_pombe` | `rules/06_external.smk` | `ted-pombe` | S1, S3, S10 | `resources/ted/pombe_ted_segments.tsv` |
+| R16 | `ecod_pombe` | `rules/06_external.smk` | `ecod-pombe` | S1, S3, S10 | `resources/ecod/pombe_ecod_segments.tsv` |
+| R17 | `dna_bed` | `rules/07_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
+| R18 | `dna_map` | `rules/07_dna.smk` | `dna-map` | S1, S3, S11 | `12_dna/DNA_domain.tsv` |
+| R19 | `dna_organize` | `rules/07_dna.smk` | `dna-organize` | S1, S3, S11 | `12_dna/merged_DNA_domain.tsv` |
+| R20 | `dna_genome_bed` | `rules/07_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `12_dna/domains.bed` |
 
 ## Appendix B — Script index
 
