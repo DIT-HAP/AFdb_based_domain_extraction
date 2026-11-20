@@ -9,11 +9,12 @@ Coordinates are 1-based and inclusive throughout the project.
 
 Input
 -----
-- A directory of ``AF-<id>-F1-model_*.pdb.gz`` / ``.cif`` / ``.cif.gz`` files.
+- The gene structure registry and the structure it selects per gene.
 
 Output
 ------
-- A TSV with ``uniprot_id``, ``protein_length``, and comma-separated ``pLDDT``.
+- A TSV with ``gene_systematic_id``, ``protein_length``, and comma-separated
+  ``pLDDT``.
 """
 
 # =============================================================================
@@ -34,9 +35,6 @@ from src.files import AppConfig, read_tsv, require_columns, write_tsv
 # =============================================================================
 # 2. CONSTANTS
 # =============================================================================
-STRUCTURE_SUFFIXES = (".pdb.gz", ".cif.gz", ".cif", ".pdb")
-STRUCTURE_PRIORITY = (".pdb.gz", ".cif", ".cif.gz")
-IDENTIFIER_SEPARATOR = "-F1-"
 REGISTRY_REQUIRED = ["gene_systematic_id", "in_analysis", "structure_path"]
 
 
@@ -64,55 +62,6 @@ def _parse_structure(path: Path, handle: TextIO) -> Structure:
     if stem.endswith(".cif"):
         return MMCIFParser().get_structure(stem, handle)
     raise ValueError(f"Unknown structure format: {path.name}")
-
-
-def parse_structure_id(name: str) -> str:
-    """Extract the protein identifier from an AlphaFold structure file name."""
-    stem = name
-    for suffix in STRUCTURE_SUFFIXES:
-        if stem.endswith(suffix):
-            stem = stem.removesuffix(suffix)
-            break
-    return stem.split(IDENTIFIER_SEPARATOR)[0].removeprefix("AF-")
-
-
-def collect_structure_files(structure_dir: Path) -> dict[str, Path]:
-    """Collect one structure file per protein, preferring PDB over mmCIF."""
-    selected: dict[str, Path] = {}
-    for suffix in STRUCTURE_PRIORITY:
-        for path in sorted(structure_dir.glob(f"*{suffix}")):
-            selected.setdefault(parse_structure_id(path.name), path)
-    return selected
-
-
-def build_plddt_table(
-    structure_dir: Path,
-    output_path: Path,
-    subset_path: Path | None = None,
-) -> None:
-    """Build the per-protein pLDDT table for a structure directory."""
-    structure_files = collect_structure_files(structure_dir)
-    if subset_path is not None:
-        subset = {line.strip() for line in subset_path.read_text().splitlines() if line.strip()}
-        structure_files = {
-            uniprot_id: path for uniprot_id, path in structure_files.items() if uniprot_id in subset
-        }
-    if not structure_files:
-        raise FileNotFoundError(f"No structure files found in {structure_dir}")
-
-    records = []
-    for uniprot_id, path in structure_files.items():
-        values = extract_plddt(path)
-        records.append(
-            {
-                "uniprot_id": uniprot_id,
-                "protein_length": len(values),
-                "pLDDT": ",".join(str(value) for value in values),
-            }
-        )
-
-    table = pd.DataFrame.from_records(records).sort_values("uniprot_id", ignore_index=True)
-    write_tsv(table, output_path)
 
 
 def build_plddt_table_from_registry(

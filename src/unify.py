@@ -8,21 +8,19 @@ Projects the three domain sources onto a single long-format schema:
 - ``TED``  — TED domains for the PomBase proteome.
 - ``ECOD`` — ECOD domains for the PomBase proteome.
 
-TED and ECOD are filtered to the proteins predicted by the dataset, so a
-per-dataset table never carries external segments for proteins it did not
-model. All coordinates are converted to 1-based inclusive. Multi-interval rows
-are exploded into one row per interval, and ``segment_part`` records the
-position within the original domain.
+TED and ECOD are filtered to the proteins selected by the registry, so the
+table never carries external segments for proteins the registry did not model.
+All coordinates are converted to 1-based inclusive. Multi-interval rows are
+exploded into one row per interval, and ``segment_part`` records the position
+within the original domain.
 
 Input
 -----
-- Annotated PAE table, PomBase TED table, PomBase ECOD table.
-- PomBase gene table and PeptideStats for annotation and protein length.
+- Annotated PAE table, PomBase TED table, PomBase ECOD table, registry.
 
 Output
 ------
-- ``results/<dataset>/segments.tsv`` and, when combined,
-  ``results/combined/segments.tsv``.
+- ``results/10_segments.tsv``.
 """
 
 # =============================================================================
@@ -71,8 +69,6 @@ PAE_REQUIRED = [
 ]
 TED_REQUIRED = ["ted_id", "uniprot_id", "consensus_level", "chopping", "plddt", "cath_label"]
 ECOD_REQUIRED = ["Protein", "Column2", "Range", "ID", "uniprot_id"]
-GENE_REQUIRED = ["uniprot_id", "gene_systematic_id", "gene_name"]
-STATS_REQUIRED = ["Systematic_ID", "Residues"]
 REGISTRY_REQUIRED = [
     "gene_systematic_id",
     "uniprot_id",
@@ -206,35 +202,6 @@ def _sort_segments(frame: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # 4. IMPERATIVE SHELL
 # =============================================================================
-def unify_segments(
-    pae_path: Path,
-    ted_path: Path,
-    ecod_path: Path,
-    gene_path: Path,
-    stats_path: Path,
-    output_path: Path,
-    *,
-    dataset: str,
-    pae_source_version: str,
-    ted_version: str,
-    ecod_version: str,
-) -> None:
-    """Build the unified segment table for one dataset."""
-    pae = load_pae_segments(pae_path, dataset, pae_source_version)
-    dataset_proteins = set(pae["uniprot_id"].astype(str))
-    ted = load_ted_segments(ted_path, dataset, ted_version)
-    ecod = load_ecod_segments(ecod_path, dataset, ecod_version)
-    ted = ted.loc[ted["uniprot_id"].astype(str).isin(dataset_proteins)]
-    ecod = ecod.loc[ecod["uniprot_id"].astype(str).isin(dataset_proteins)]
-    combined = pd.concat([pae, ted, ecod], ignore_index=True)
-    genes = read_tsv(gene_path)
-    stats = read_tsv(stats_path)
-    require_columns(genes, GENE_REQUIRED, gene_path)
-    require_columns(stats, STATS_REQUIRED, stats_path)
-    annotated = attach_pombase_annotation(combined, genes, stats)
-    write_tsv(_sort_segments(annotated)[UNIFIED_COLUMNS], output_path)
-
-
 def unify_segments_from_registry(
     pae_path: Path,
     ted_path: Path,
@@ -266,10 +233,3 @@ def unify_segments_from_registry(
     )
     annotated = attach_pombase_annotation(combined, genes, stats)
     write_tsv(_sort_segments(annotated)[UNIFIED_COLUMNS], output_path)
-
-
-def combine_segments(input_paths: list[Path], output_path: Path) -> None:
-    """Concatenate per-dataset unified tables into one long table."""
-    frames = [read_tsv(path) for path in input_paths]
-    combined = pd.concat(frames, ignore_index=True)
-    write_tsv(_sort_segments(combined)[UNIFIED_COLUMNS], output_path)

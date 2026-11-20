@@ -3,8 +3,8 @@ Command-line interface.
 =======================
 
 A single Typer application exposes one subcommand per pipeline stage. Snakemake
-rules call these subcommands with explicit paths, so the CLI never has to read
-the dataset declarations embedded in ``workflow/datasets/``.
+rules call these subcommands with explicit paths, so the CLI takes every input
+as an argument instead of discovering dataset files itself.
 
 Input
 -----
@@ -49,20 +49,15 @@ from src.files import (
     setup_logger,
     write_tsv,
 )
-from src.pae import build_domain_table, run_pae_to_domains, run_pae_to_domains_from_registry
-from src.plddt import build_plddt_table, build_plddt_table_from_registry
+from src.pae import build_domain_table, run_pae_to_domains_from_registry
+from src.plddt import build_plddt_table_from_registry
 from src.registry import RegistryPaths, build_registry
 from src.segments import (
     annotate_table,
-    build_confident_table,
-    build_reformated_table,
+    build_confident_table_from_registry,
     build_reformated_table_from_registry,
 )
-from src.unify import (
-    combine_segments,
-    unify_segments as build_unified_segments,
-    unify_segments_from_registry,
-)
+from src.unify import unify_segments_from_registry
 from src.uniprot import (
     RESOLUTION_INPUT_COLUMNS,
     TRIANGULATION_INPUT_COLUMNS,
@@ -295,51 +290,6 @@ def registry_unify_segments(
     )
 
 
-@app.command("pae-to-domains")
-def pae_to_domains(
-    pae_dir: Path = typer.Option(..., help="Directory of PAE JSON files."),
-    output_dir: Path = typer.Option(..., help="Directory for .domain files."),
-    jobs: int = typer.Option(1, min=1, help="Parallel worker processes."),
-    protein_subset: Path | None = typer.Option(None, help="Optional one-ID-per-line subset."),
-    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
-) -> None:
-    """Cluster PAE matrices into domain files."""
-    run_pae_to_domains(pae_dir, output_dir, load_config(config).parameters, jobs, protein_subset)
-
-
-@app.command("domains-to-table")
-def domains_to_table(
-    domains_dir: Path = typer.Option(..., help="Directory of .domain files."),
-    output: Path = typer.Option(..., help="Output PAE domain table."),
-) -> None:
-    """Collect .domain files into the PAE domain table."""
-    build_domain_table(domains_dir, output)
-
-
-@app.command("extract-plddt")
-def extract_plddt(
-    structure_dir: Path = typer.Option(..., help="Directory of PDB/mmCIF structures."),
-    output: Path = typer.Option(..., help="Output pLDDT table."),
-    protein_subset: Path | None = typer.Option(None, help="Optional one-ID-per-line subset."),
-) -> None:
-    """Extract per-residue pLDDT values from structures."""
-    build_plddt_table(structure_dir, output, protein_subset)
-
-
-@app.command("merge-domains")
-def merge_domains(
-    pae_table: Path = typer.Option(..., help="PAE domain table."),
-    plddt_table: Path = typer.Option(..., help="pLDDT table."),
-    gene_table: Path = typer.Option(..., help="PomBase gene table."),
-    output: Path = typer.Option(..., help="Output reformatted domain table."),
-    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
-) -> None:
-    """Merge PAE clusters with pLDDT confidence."""
-    build_reformated_table(
-        pae_table, plddt_table, gene_table, load_config(config).parameters, output
-    )
-
-
 @app.command("assign-type")
 def assign_type(
     input_table: Path = typer.Option(..., "--input", help="Reformatted domain table."),
@@ -350,15 +300,17 @@ def assign_type(
     annotate_table(input_table, load_config(config).parameters, output)
 
 
-@app.command("confident-domains")
-def confident_domains(
+@app.command("registry-confident-domains")
+def registry_confident_domains(
     plddt_table: Path = typer.Option(..., help="pLDDT table."),
-    gene_table: Path = typer.Option(..., help="PomBase gene table."),
+    registry: Path = typer.Option(..., help="Gene structure registry."),
     output: Path = typer.Option(..., help="Output confident-domain table."),
     config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
 ) -> None:
     """Run the independent 3D-AF-Surfer style confident-domain caller."""
-    build_confident_table(plddt_table, gene_table, load_config(config).parameters, output)
+    build_confident_table_from_registry(
+        plddt_table, registry, load_config(config).parameters, output
+    )
 
 
 @app.command("dna-bed")
@@ -417,43 +369,6 @@ def ecod_pombe(
 ) -> None:
     """Extract the PomBase subset of the ECOD dump."""
     build_ecod_table(ecod_dump, gene_table, output)
-
-
-@app.command("unify-segments")
-def unify_segments(
-    pae_table: Path = typer.Option(..., help="Annotated PAE table."),
-    ted_table: Path = typer.Option(..., help="PomBase TED table."),
-    ecod_table: Path = typer.Option(..., help="PomBase ECOD table."),
-    gene_table: Path = typer.Option(..., help="PomBase gene table for annotation."),
-    stats_table: Path = typer.Option(..., help="PomBase PeptideStats table."),
-    output: Path = typer.Option(..., help="Output unified segment table."),
-    dataset: str = typer.Option(..., help="Dataset identifier."),
-    pae_version: str = typer.Option(..., help="PAE model version label."),
-    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
-) -> None:
-    """Build the unified segment table for one dataset."""
-    app_config = load_config(config)
-    build_unified_segments(
-        pae_table,
-        ted_table,
-        ecod_table,
-        gene_table,
-        stats_table,
-        output,
-        dataset=dataset,
-        pae_source_version=pae_version,
-        ted_version=app_config.resources.ted_release,
-        ecod_version=app_config.resources.ecod_release,
-    )
-
-
-@app.command("combine-segments")
-def combine_segments_command(
-    inputs: list[Path] = typer.Option(..., "--input", help="Per-dataset segment tables."),
-    output: Path = typer.Option(..., help="Combined output table."),
-) -> None:
-    """Concatenate per-dataset segment tables."""
-    combine_segments(inputs, output)
 
 
 # =============================================================================

@@ -58,10 +58,7 @@ class DatasetConfig:
     version: str
     structure: str
     pae: str
-    gene_table: str | None = None
     fasta: str | None = None
-    protein_subset: str | None = None
-    enabled: bool = False
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -131,10 +128,7 @@ def _load_datasets(raw: dict[str, Any]) -> dict[str, DatasetConfig]:
             version=spec["version"],
             structure=spec["structure"],
             pae=spec["pae"],
-            gene_table=spec.get("gene_table"),
             fasta=spec.get("fasta"),
-            protein_subset=spec.get("protein_subset"),
-            enabled=spec.get("enabled", False),
         )
         for name, spec in raw["datasets"].items()
     }

@@ -24,9 +24,8 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
 `docs/results_index.md` numbers every output file, its row count, the producing
 rule (`R#`), and the script (`S#`).
 
-The legacy per-dataset outputs (`AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
-`LocalAF2_DY47073Annotation`, `AF3_LongProt`, `DY47073_ProteinSubset`) are
-retained as the v1 regression baseline and are disabled by default.
+The legacy per-dataset branch was removed on 2026-11-19; its archived outputs
+remain under `tmp/afdb_vs_pombase/archive/` and the v1 code in git history.
 
 Segment coordinates are **1-based inclusive**; `length = end - start + 1`.
 
@@ -40,11 +39,7 @@ workflow/rules/02_uniprot.smk UniProt snapshot refresh (manual, not in rule all)
 workflow/rules/03_compare.smk AFdb vs PomBase comparison
 workflow/rules/04_registry.smk Gene structure registry
 workflow/rules/05_curated.smk PAE clustering through unified segments
-workflow/rules/06_pae.smk     Legacy per-dataset declarations and PAE rules
-workflow/rules/07_plddt.smk   Legacy pLDDT extraction
-workflow/rules/08_domains.smk Legacy merge, annotation, confident domains
 workflow/rules/09_external.smk TED/ECOD PomBase subsets
-workflow/rules/10_unify.smk   Legacy per-dataset and combined segments
 workflow/rules/11_dna.smk     DNA projection branch
 workflow/envs/                Driver environment and the shared rule environment
 src/                          Functional core + typer CLI
@@ -74,7 +69,7 @@ Manual CLI use is also supported:
 
 ```bash
 python scripts/afdb_domains.py --help
-python scripts/afdb_domains.py pae-to-domains --pae-dir <dir> --output-dir <dir>
+python scripts/afdb_domains.py registry-pae-to-domains --registry <tsv> --output-dir <dir>
 ```
 
 ## Configuration
@@ -135,23 +130,11 @@ The two UniProt snapshots are pinned resources. `02_uniprot.smk` provides
 manual refresh rules that write candidates to `results/02_uniprot/`; they are
 not part of `rule all` (see `resources/README.md`).
 
-The legacy per-dataset path is kept for regression testing:
-
-```
-PAE JSON ──pae-to-domains──> *.domain ──domains-to-table──> <ds>_PAE_domain.tsv
-AF structures ──extract-plddt──> <ds>_pLDDT_scores.tsv
-        └──────── merge-domains ────────┘
-                        │
-                        v
-              <ds>_reformated.tsv ──assign-type──> <ds>_annotated.tsv
-                                                        │
-TED dump ──ted-pombe──> pombe_ted_segments.tsv ─────────┤
-ECOD dump ──ecod-pombe──> pombe_ecod_segments.tsv ──────┴──unify-segments──> segments.tsv
-```
-
-The DNA branch (`dna-bed` → `dna-map` → `dna-organize` → `dna-genome-bed`) and
-the 3D-AF-Surfer branch (`confident-domains`) are maintained but are not part
-of the acceptance criteria.
+The DNA branch (`dna-bed` → `dna-map` → `dna-organize` → `dna-genome-bed`)
+reads the canonical annotated table and writes `results/12_dna/`. The
+3D-AF-Surfer branch (`registry-confident-domains`) reads the canonical pLDDT
+table plus the registry and writes `results/11_confident_domains.tsv`. Both are
+maintained but are not part of the acceptance criteria.
 
 ## Provenance
 

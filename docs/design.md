@@ -14,10 +14,11 @@ role instead of pinning one global release:
 | TED | Zenodo 13908086 | Domain assignments |
 | ECOD | `dpam_v5` | Domain assignments |
 
-The legacy `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`, `LocalAF2_DY47073Annotation`,
-`AF3_LongProt`, and `DY47073_ProteinSubset` datasets are declared but disabled;
-they remain as the v1 regression baseline. The canonical output comes from the
-gene structure registry. Older documents call these datasets `vDulab`,
+The four pinned datasets (`AFDB_v6`, `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
+`AF3_LongProt`) feed the gene structure registry; `AFDB_v4` is used only for
+TED/ECOD coordinate validation. The per-dataset analysis branch was removed on
+2026-11-19 and now lives only in git history. The canonical output comes from
+the gene structure registry. Older documents call these datasets `vDulab`,
 `vDulab2`, and `AF3`.
 
 ## Gene structure registry
@@ -67,15 +68,14 @@ Rules are grouped by pipeline stage, one file per stage, in `workflow/rules/`:
 | `02_uniprot.smk` | Manual UniProt snapshot refresh (not in `rule all`) |
 | `03_compare.smk` | AFdb vs PomBase comparison |
 | `04_registry.smk` | Gene structure registry |
-| `05_curated.smk` | PAE clustering through unified segments |
-| `06_pae.smk` | Legacy dataset declarations and PAE rules (D1–D5) |
-| `07_plddt.smk`–`11_dna.smk` | Legacy pLDDT, domain, external, unification, DNA branches |
+| `05_curated.smk` | PAE clustering through unified segments, plus the confident-domain caller |
+| `09_external.smk` | TED/ECOD PomBase subsets |
+| `11_dna.smk` | DNA projection branch |
 
 The root `Snakefile` holds the configuration, the shared numbered result path
-constants, the stage includes, and `rule all`. Dataset-specific input paths
-and version labels live at the top of `06_pae.smk`, the entry point of the
-legacy per-dataset chain. The unused `AFDB_20251107` declaration was dropped;
-the canonical registry reads the v6 structures through `config/config.yaml`.
+constants, the stage includes, and `rule all`. The canonical registry reads the
+structures through `config/config.yaml`; the unused `AFDB_20251107` declaration
+was dropped.
 
 The AFdb inventory is produced once and cached, so the comparison and registry
 no longer parse 5,196 gzip CIF headers themselves. `03_afdb_entries.tsv`
@@ -86,8 +86,8 @@ inventory; PAE files without a CIF entry are reported and ignored.
 ## Resource policy
 
 - `resources/` holds small PomBase-only inputs that the pipeline reads directly
-  and that are committed: PomBase tables, the TED/ECOD PomBase subsets, the
-  DY47073_ProteinSubset input, and the provenance manifest.
+  and that are committed: PomBase tables, the TED/ECOD PomBase subsets, and the
+  provenance manifest. The archived DY47073 protein subset is kept for reference.
 - Raw upstream dumps live under the reference root
   (`/hugedata/YushengYang/AFdb`): the 128G TED domain summary, the 27G TED
   per-chain segmentation, the 31M ECOD dump, and the AlphaFold structures,

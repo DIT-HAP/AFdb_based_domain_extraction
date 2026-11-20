@@ -10,15 +10,17 @@ same segmentation. This replaces the legacy ``fix_random_seed`` duplicate.
 
 Input
 -----
-- A directory of ``*predicted_aligned_error*.json`` files.
+- A gene structure registry selecting one PAE JSON per analysed gene.
 
 Output
 ------
-- One ``.domain`` file per input: comma-separated residue indices per cluster.
+- One ``.domain`` file per selected gene: comma-separated residue indices per
+  cluster.
 
 Usage
 -----
-    python scripts/afdb_domains.py pae-to-domains --pae-dir <dir> --output-dir <dir>
+    python scripts/afdb_domains.py registry-pae-to-domains \
+        --registry <registry.tsv> --output-dir <dir>
 """
 
 # =============================================================================
@@ -127,16 +129,6 @@ def domain_file_to_runs(path: Path) -> list[str]:
     return runs
 
 
-def parse_pae_id(name: str) -> str:
-    """Extract the protein identifier from a PAE JSON file name."""
-    return name.split(VERSION_SEPARATOR)[0].removeprefix("AF-")
-
-
-def read_subset(path: Path) -> set[str]:
-    """Read a one-identifier-per-line subset file."""
-    return {line.strip() for line in path.read_text().splitlines() if line.strip()}
-
-
 def parse_domain_filename(name: str) -> tuple[str, str]:
     """Extract the protein identifier and model version from a ``.domain`` name."""
     stem = name.removesuffix(DOMAIN_SUFFIX)
@@ -149,7 +141,7 @@ def parse_domain_filename(name: str) -> tuple[str, str]:
     raise ValueError(f"Unrecognised domain filename: {name}")
 
 
-def build_domain_table(domains_dir: Path, output_path: Path, id_column: str = "uniprot_id") -> None:
+def build_domain_table(domains_dir: Path, output_path: Path, *, id_column: str) -> None:
     """Collect every ``.domain`` file into the PAE domain table."""
     records: list[dict[str, object]] = []
     for path in sorted(domains_dir.glob(f"*{DOMAIN_SUFFIX}")):
@@ -193,34 +185,6 @@ def process_pae_file(
     )
     output_path = output_dir / (output_name or f"{pae_path.stem}{DOMAIN_SUFFIX}")
     write_domain_file(clusters, output_path)
-
-
-def run_pae_to_domains(
-    pae_dir: Path,
-    output_dir: Path,
-    parameters: PipelineParameters,
-    jobs: int,
-    subset_path: Path | None = None,
-) -> None:
-    """Cluster every PAE JSON file in a directory, optionally in parallel."""
-    pae_files = sorted(pae_dir.glob("*.json"))
-    if subset_path is not None:
-        subset = read_subset(subset_path)
-        pae_files = [path for path in pae_files if parse_pae_id(path.name) in subset]
-    if not pae_files:
-        raise FileNotFoundError(f"No PAE JSON files found in {pae_dir}")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if jobs <= 1:
-        for path in pae_files:
-            process_pae_file(path, output_dir, parameters)
-        return
-    with ProcessPoolExecutor(max_workers=jobs) as pool:
-        futures = [
-            pool.submit(process_pae_file, path, output_dir, parameters) for path in pae_files
-        ]
-        for future in futures:
-            future.result()
 
 
 def run_pae_to_domains_from_registry(

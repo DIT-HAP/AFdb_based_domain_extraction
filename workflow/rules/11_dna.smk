@@ -18,9 +18,9 @@ rule dna_bed:
 rule dna_map:
     input:
         nucleotide_bed=f"{DATA}/nucleotide_bed.tsv",
-        annotated=rules.assign_type.output.table,
+        annotated=rules.registry_assign_type.output.table,
     output:
-        table=f"{RESULTS}/{{dataset}}/DNA_domain.tsv",
+        table=f"{RESULTS}/12_dna/DNA_domain.tsv",
     params:
         cli=str(CLI),
     conda:
@@ -34,7 +34,7 @@ rule dna_organize:
     input:
         rules.dna_map.output.table,
     output:
-        table=f"{RESULTS}/{{dataset}}/merged_DNA_domain.tsv",
+        table=f"{RESULTS}/12_dna/merged_DNA_domain.tsv",
     params:
         cli=str(CLI),
     conda:
@@ -47,7 +47,7 @@ rule dna_genome_bed:
     input:
         rules.dna_organize.output.table,
     output:
-        table=f"{RESULTS}/{{dataset}}/domains.bed",
+        table=f"{RESULTS}/12_dna/domains.bed",
     params:
         cli=str(CLI),
     conda:

@@ -6,8 +6,8 @@ Root Snakefile: configuration roots, shared result path constants, stage
 includes, and the default target.
 
 Rules live in ``workflow/rules/<nn>_<stage>.smk``, one file per pipeline stage:
-AFdb extraction, UniProt refresh, comparison, registry, curated chain, then the
-legacy per-dataset branch.
+AFdb extraction, UniProt refresh, comparison, registry, curated chain, TED/ECOD
+subsets, and the optional DNA branch.
 
 Input
 -----
@@ -86,29 +86,17 @@ PLDDT_TABLE = f"{RESULTS}/07_pLDDT_scores.tsv"
 REFORMATED_TABLE = f"{RESULTS}/08_reformated_PAE_domain.tsv"
 ANNOTATED_TABLE = f"{RESULTS}/09_annotated_PAE_domain.tsv"
 SEGMENTS_TABLE = f"{RESULTS}/10_segments.tsv"
+CONFIDENT_TABLE = f"{RESULTS}/11_confident_domains.tsv"
 
 CURATED_VERSION = "registry_2026-06-01"
 
-
-def subset_flag(entry):
-    """Render the optional --protein-subset flag for a dataset."""
-    subset = entry.get("protein_subset")
-    return f"--protein-subset {subset}" if subset else ""
-
-
-wildcard_constraints:
-    dataset="(?!combined$)[A-Za-z0-9_.-]+",
 
 include: "rules/01_afdb.smk"
 include: "rules/02_uniprot.smk"
 include: "rules/03_compare.smk"
 include: "rules/04_registry.smk"
 include: "rules/05_curated.smk"
-include: "rules/06_pae.smk"
-include: "rules/07_plddt.smk"
-include: "rules/08_domains.smk"
 include: "rules/09_external.smk"
-include: "rules/10_unify.smk"
 include: "rules/11_dna.smk"
 
 
@@ -119,6 +107,5 @@ rule all:
         REGISTRY_TABLE,
         REGISTRY_STATS,
         SEGMENTS_TABLE,
-        expand(f"{RESULTS}/{{dataset}}/segments.tsv", dataset=ENABLED_DATASETS),
     output:
         touch(f"{RESULTS}/.all_done"),

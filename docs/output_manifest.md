@@ -6,19 +6,23 @@ numbered inventory of the active outputs, see [results_index.md](results_index.m
 The v1 repository is tagged `v1-legacy` and remains the read-only reference
 baseline. Nothing is deleted from it.
 
-## Reproduced by v2
+## Canonical equivalents
 
-| Group | v1 files | v2 producer | Status |
+The legacy per-dataset branch was removed on 2026-11-19, so the v1 per-dataset
+tables are no longer reproduced directly. The registry chain produces one
+canonical table per stage; v1 remains available in git history.
+
+| Group | v1 files | Canonical producer | Canonical output |
 |---|---|---|---|
-| PAE domain tables | `<ds>_PAE_domain.tsv` | `domains-to-table` | Reproduced |
-| pLDDT tables | `<ds>_pLDDT_scores.tsv` | `extract-plddt` | Reproduced |
-| Reformatted domains | `<ds>_reformated_PAE_domain_based_on_pLDDT.tsv` | `merge-domains` | Reproduced |
-| Annotated domains | `<ds>_annotated_PAE_domain_based_on_pLDDT.tsv` | `assign-type` | Reproduced |
-| Confident domains | `<ds>_confident_domains_based_on_pLDDT.tsv` | `confident-domains` | Reproduced with known drift (below) |
-| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | Regenerated as `resources/ted/pombe_ted_segments.tsv` from the raw dump |
-| ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | Regenerated into `resources/ecod/` |
+| PAE domain tables | `<ds>_PAE_domain.tsv` | `registry-domains-to-table` | `results/06_PAE_domain.tsv` |
+| pLDDT tables | `<ds>_pLDDT_scores.tsv` | `registry-extract-plddt` | `results/07_pLDDT_scores.tsv` |
+| Reformatted domains | `<ds>_reformated_PAE_domain_based_on_pLDDT.tsv` | `registry-merge-domains` | `results/08_reformated_PAE_domain.tsv` |
+| Annotated domains | `<ds>_annotated_PAE_domain_based_on_pLDDT.tsv` | `assign-type` | `results/09_annotated_PAE_domain.tsv` |
+| Confident domains | `<ds>_confident_domains_based_on_pLDDT.tsv` | `registry-confident-domains` | `results/11_confident_domains.tsv` |
+| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | `resources/ted/pombe_ted_segments.tsv` |
+| ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | `resources/ecod/pombe_ecod_segments.tsv` |
 
-Datasets covered: `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
+The v1 datasets covered were `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
 `LocalAF2_DY47073Annotation`, `AF3_LongProt`, `DY47073_ProteinSubset`.
 
 ## New in v2
@@ -29,10 +33,9 @@ Datasets covered: `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
 | AFdb/PomBase comparison | `results/03_comparison/*` | `compare-afdb-pombase` |
 | Gene structure registry | `results/04_registry/01_gene_structure_registry.tsv`, `results/04_registry/03_registry_stats.tsv` | `build-registry` |
 | Curated unified segments | `results/10_segments.tsv` | `registry-unify-segments` |
-| Unified segment table per dataset (legacy) | `results/<dataset>/segments.tsv` | `unify-segments` |
-| Combined segment table (legacy) | `results/combined/segments.tsv` | `combine-segments` |
+| Confident domains | `results/11_confident_domains.tsv` | `registry-confident-domains` |
 | Resource provenance | `resources/manifest.tsv` | `fetch-resources` |
-| DNA projections | `results/<dataset>/DNA_domain.tsv`, `merged_DNA_domain.tsv`, `domains.bed` | `dna-*` |
+| DNA projections | `results/12_dna/DNA_domain.tsv`, `merged_DNA_domain.tsv`, `domains.bed` | `dna-*` |
 
 ## Archived, not reproduced
 
@@ -64,7 +67,7 @@ Datasets covered: `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
    `predictions/LocalAF2_PomBaseDiffAFdb_20240305` on hugedata.
 4. **Column order.** v2 writes `domain_id/domain_residues` before
    `protein_length`; values are identical.
-5. **UniProt fallback in `Systematic ID`.** The current v1
-   `merge_PAE_domains.py` fills unmapped proteins with their UniProt
-   accession, but the 2023 AFDB v4 output file predates that fallback. v2
-   follows the script, so 42 rows gain a systematic id.
+5. **UniProt fallback in `Systematic ID`.** The v1 `merge_PAE_domains.py`
+   filled unmapped proteins with their UniProt accession. The legacy branch
+   was removed on 2026-11-19; the registry tables join on the registry's own
+   gene ids, so the fallback no longer exists.

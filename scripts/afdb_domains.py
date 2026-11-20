@@ -10,7 +10,7 @@ and error handling lives in :mod:`src.cli`.
 Usage
 -----
     python scripts/afdb_domains.py --help
-    python scripts/afdb_domains.py pae-to-domains --pae-dir <dir> --output-dir <dir>
+    python scripts/afdb_domains.py registry-pae-to-domains --registry <tsv> --output-dir <dir>
 
 Author: Yusheng Yang (guidance) + Agent (implementation)
 Date:   2026-11-03

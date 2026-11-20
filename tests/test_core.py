@@ -5,10 +5,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from src.dna import organize_domains
-from src.files import PipelineParameters, load_config
+from src.files import PipelineParameters, load_config, write_tsv
 from src.pae import domain_file_to_runs, parse_domain_filename
-from src.plddt import check_overlap, domain_stats, merge_intervals, parse_structure_id
-from src.segments import assign_type, build_reformated_frame
+from src.plddt import check_overlap, domain_stats, merge_intervals
+from src.segments import (
+    assign_type,
+    build_confident_table_from_registry,
+    build_reformated_frame,
+)
 from src.unify import attach_pombase_annotation, expand_intervals
 
 PARAMETERS = PipelineParameters(
@@ -29,9 +33,8 @@ def test_load_config_reads_datasets() -> None:
     assert config.datasets["LocalAF2_PomBaseDiffAFdb"].version == (
         "LocalAF2_PomBaseDiffAFdb_20240305"
     )
-    subset = config.datasets["DY47073_ProteinSubset"]
-    assert subset.protein_subset == "project:resources/dy47073/protein_subset.txt"
-    assert subset.enabled is False
+    assert config.datasets["AF3_LongProt"].version == "AF3_LongProt_20241101"
+    assert config.datasets["AFDB_v4"].structure.startswith("reference:UP000002485")
 
 
 def test_merge_intervals_adjacent() -> None:
@@ -67,13 +70,6 @@ def test_domain_file_to_runs(tmp_path: Path) -> None:
     path = tmp_path / "AF-P12345-F1-predicted_aligned_error_v4.domain"
     path.write_text("0,1,2,5,6,\n")
     assert domain_file_to_runs(path) == ["1-3,6-7"]
-
-
-def test_parse_structure_id() -> None:
-    assert parse_structure_id("AF-P12345-F1-model_v4.pdb.gz") == "P12345"
-    assert parse_structure_id("AF-SPAC23G3.02c_1-702-F1-model_AF3_LongProt_20241101.cif") == (
-        "SPAC23G3.02c_1-702"
-    )
 
 
 def test_expand_intervals() -> None:
@@ -149,6 +145,31 @@ def test_build_reformated_frame_uses_registry_gene_id() -> None:
     assert result["gene_systematic_id"].tolist() == ["g1", "g1"]
     assert result["domain_residues"].tolist() == ["1-3", "4-6"]
     assert "uniprot_id" not in result.columns
+
+
+def test_build_confident_table_from_registry_uses_gene_id(tmp_path: Path) -> None:
+    plddt = pd.DataFrame(
+        {
+            "gene_systematic_id": ["g1"],
+            "protein_length": [120],
+            "pLDDT": [",".join(["90"] * 60 + ["50"] * 60)],
+        }
+    )
+    registry = pd.DataFrame({"gene_systematic_id": ["g1"], "uniprot_id": ["P1"]})
+    plddt_path = tmp_path / "plddt.tsv"
+    registry_path = tmp_path / "registry.tsv"
+    output_path = tmp_path / "confident.tsv"
+    write_tsv(plddt, plddt_path)
+    write_tsv(registry, registry_path)
+
+    build_confident_table_from_registry(plddt_path, registry_path, PARAMETERS, output_path)
+
+    result = pd.read_csv(output_path, sep="\t", keep_default_na=False)
+    assert result["Systematic ID"].tolist() == ["g1", "g1"]
+    assert result["uniprot_id"].tolist() == ["P1", "P1"]
+    assert result["domain_residues"].tolist() == ["1-60", "61-120"]
+    assert result["domain_type"].tolist() == ["confident", ""]
+    assert result["protein_length"].tolist() == [120, 120]
 
 
 def test_organize_domains(tmp_path: Path) -> None:

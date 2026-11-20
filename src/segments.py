@@ -15,11 +15,12 @@ domain caller.
 
 Input
 -----
-- PAE domain table, pLDDT table, and a PomBase gene table.
+- PAE domain table, pLDDT table, and the gene structure registry.
 
 Output
 ------
-- Reformatted domain table and its annotated variant.
+- Reformatted domain table, its annotated variant, and the confident-domain
+  table.
 """
 
 # =============================================================================
@@ -36,9 +37,6 @@ from src.plddt import check_overlap, domain_stats, merge_intervals
 # =============================================================================
 # 2. CONSTANTS & COLUMN CONTRACTS
 # =============================================================================
-PAE_REQUIRED = ["uniprot_id", "version", "domain_id", "domain_residues", "protein_length"]
-PLDDT_REQUIRED = ["uniprot_id", "protein_length", "pLDDT"]
-GENE_REQUIRED = ["gene_systematic_id", "uniprot_id"]
 REGISTRY_REQUIRED = ["gene_systematic_id", "uniprot_id"]
 REGISTRY_PAE_REQUIRED = [
     "gene_systematic_id",
@@ -167,7 +165,7 @@ def _clusters_overlap(merged_clusters: list[list[str]]) -> bool:
     return bool(set(overlapping))
 
 
-def build_plddt_lookup(plddt: pd.DataFrame, id_column: str = "uniprot_id") -> dict[str, np.ndarray]:
+def build_plddt_lookup(plddt: pd.DataFrame, *, id_column: str) -> dict[str, np.ndarray]:
     """Map each protein to its per-residue pLDDT array."""
     unique = plddt.drop_duplicates(id_column)
     return {
@@ -180,7 +178,8 @@ def attach_stats(
     frame: pd.DataFrame,
     plddt_lookup: dict[str, np.ndarray],
     threshold: float,
-    id_column: str = "uniprot_id",
+    *,
+    id_column: str,
 ) -> pd.DataFrame:
     """Attach length and pLDDT summary columns to a domain table."""
     stats = [
@@ -204,24 +203,6 @@ def _sort_and_number(frame: pd.DataFrame, id_column: str) -> pd.DataFrame:
     return result
 
 
-def _join_gene_annotation(
-    frame: pd.DataFrame,
-    genes: pd.DataFrame,
-    *,
-    fill_missing: bool,
-) -> pd.DataFrame:
-    """Attach PomBase systematic ids and gene names, optionally falling back to UniProt."""
-    gene_map = genes[["gene_systematic_id", "uniprot_id"]].drop_duplicates("uniprot_id")
-    result = gene_map.merge(frame, on="uniprot_id", how="right")
-    if fill_missing:
-        result["gene_systematic_id"] = np.where(
-            result["gene_systematic_id"].isna(),
-            result["uniprot_id"],
-            result["gene_systematic_id"],
-        )
-    return result.rename(columns={"gene_systematic_id": "Systematic ID"})
-
-
 def _join_registry_annotation(frame: pd.DataFrame, registry: pd.DataFrame) -> pd.DataFrame:
     """Attach the registry's gene id and primary accession."""
     annotation = registry[["gene_systematic_id", "uniprot_id"]]
@@ -234,15 +215,15 @@ def build_reformated_frame(
     plddt: pd.DataFrame,
     parameters: PipelineParameters,
     *,
-    id_column: str = "uniprot_id",
+    id_column: str,
 ) -> pd.DataFrame:
     """Merge PAE clusters with pLDDT confidence into one reformatted frame."""
-    lookup = build_plddt_lookup(plddt, id_column)
+    lookup = build_plddt_lookup(plddt, id_column=id_column)
     merged = pae.merge(plddt[[id_column, "protein_length"]], on=[id_column, "protein_length"])
-    merged = attach_stats(merged, lookup, parameters.plddt_threshold, id_column)
+    merged = attach_stats(merged, lookup, parameters.plddt_threshold, id_column=id_column)
     exploded = _merge_groups(merged, parameters, id_column)
     numbered = _sort_and_number(exploded, id_column)
-    return attach_stats(numbered, lookup, parameters.plddt_threshold, id_column)
+    return attach_stats(numbered, lookup, parameters.plddt_threshold, id_column=id_column)
 
 
 # =============================================================================
@@ -267,26 +248,6 @@ def _merge_groups(
             for interval in merge_domain_group(group, parameters)
         )
     return pd.DataFrame.from_records(records)
-
-
-def build_reformated_table(
-    pae_path: Path,
-    plddt_path: Path,
-    gene_path: Path,
-    parameters: PipelineParameters,
-    output_path: Path,
-) -> None:
-    """Merge PAE clusters with pLDDT confidence and write the reformatted table."""
-    pae = read_tsv(pae_path)
-    plddt = read_tsv(plddt_path)
-    genes = read_tsv(gene_path)
-    require_columns(pae, PAE_REQUIRED, pae_path)
-    require_columns(plddt, PLDDT_REQUIRED, plddt_path)
-    require_columns(genes, GENE_REQUIRED, gene_path)
-
-    numbered = build_reformated_frame(pae, plddt, parameters)
-    annotated = _join_gene_annotation(numbered, genes, fill_missing=True)
-    write_tsv(annotated[REFORMATED_COLUMNS], output_path)
 
 
 def build_reformated_table_from_registry(
@@ -367,7 +328,7 @@ def _complement(intervals: list[str], protein_length: int) -> list[str]:
 def _confident_records(plddt: pd.DataFrame, parameters: PipelineParameters) -> pd.DataFrame:
     """Build confident and non-confident segment records for every protein."""
     records = []
-    for uniprot_id, values_text in zip(plddt["uniprot_id"], plddt["pLDDT"], strict=True):
+    for gene, values_text in zip(plddt["gene_systematic_id"], plddt["pLDDT"], strict=True):
         values = np.asarray(values_text.split(","), dtype=float)
         confident = merge_intervals(
             _confident_intervals(
@@ -377,35 +338,45 @@ def _confident_records(plddt: pd.DataFrame, parameters: PipelineParameters) -> p
         )
         non_confident = _complement(confident, len(values))
         records.extend(
-            {"uniprot_id": uniprot_id, "domain_residues": interval, "domain_type": "confident"}
+            {
+                "gene_systematic_id": gene,
+                "protein_length": len(values),
+                "domain_residues": interval,
+                "domain_type": "confident",
+            }
             for interval in confident
         )
         records.extend(
-            {"uniprot_id": uniprot_id, "domain_residues": interval, "domain_type": ""}
+            {
+                "gene_systematic_id": gene,
+                "protein_length": len(values),
+                "domain_residues": interval,
+                "domain_type": "",
+            }
             for interval in non_confident
         )
     return pd.DataFrame.from_records(records)
 
 
-def build_confident_table(
+def build_confident_table_from_registry(
     plddt_path: Path,
-    gene_path: Path,
+    registry_path: Path,
     parameters: PipelineParameters,
     output_path: Path,
 ) -> None:
-    """Build the 3D-AF-Surfer style confident-domain table."""
+    """Build the 3D-AF-Surfer style confident-domain table from registry selections."""
     plddt = read_tsv(plddt_path)
-    genes = read_tsv(gene_path)
-    require_columns(plddt, PLDDT_REQUIRED, plddt_path)
-    require_columns(genes, GENE_REQUIRED, gene_path)
+    registry = read_tsv(registry_path)
+    require_columns(plddt, REGISTRY_PLDDT_REQUIRED, plddt_path)
+    require_columns(registry, REGISTRY_REQUIRED, registry_path)
 
+    id_column = "gene_systematic_id"
     records = _confident_records(plddt, parameters)
     records["_start"] = records["domain_residues"].str.split("-").str[0].astype(int)
-    records = records.sort_values(["uniprot_id", "_start"], kind="stable").drop(columns="_start")
-    records["domain_id"] = records.groupby("uniprot_id", sort=False).cumcount() + 1
+    records = records.sort_values([id_column, "_start"], kind="stable").drop(columns="_start")
+    records["domain_id"] = records.groupby(id_column, sort=False).cumcount() + 1
 
-    lookup = build_plddt_lookup(plddt)
-    records = records.merge(plddt[["uniprot_id", "protein_length"]], on="uniprot_id", how="left")
-    records = attach_stats(records, lookup, parameters.plddt_threshold)
-    annotated = _join_gene_annotation(records, genes, fill_missing=False)
+    lookup = build_plddt_lookup(plddt, id_column=id_column)
+    records = attach_stats(records, lookup, parameters.plddt_threshold, id_column=id_column)
+    annotated = _join_registry_annotation(records, registry)
     write_tsv(annotated[CONFIDENT_COLUMNS], output_path)
