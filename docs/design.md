@@ -99,7 +99,7 @@ inventory; PAE files without a CIF entry are reported and ignored.
   large is committed.
 - `ted-pombe` and `ecod-pombe` stream the raw dumps and write the PomBase
   subsets (selected columns plus a full-column companion) into
-  `results/08_external/`, so the extraction is reproducible from the workflow
+  `results/10_external/`, so the extraction is reproducible from the workflow
   alone.
 - `fetch-resources` records size and SHA-256 (files under 50MB) for every
   configured resource.

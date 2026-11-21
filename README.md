@@ -16,7 +16,7 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
   matrix, modelled sequence, coordinate basis, and analysis flag.
 - `results/04_registry/03_registry_stats.tsv` — downstream counts derived from
   the registry (LocalAF2_PomBaseDiffAFdb, AF3_LongProt, and TED/ECOD coverage).
-- `results/10_segments.tsv` — the canonical unified segment table with
+- `results/11_segments.tsv` — the canonical unified segment table with
   three sources: `PAE`, `TED`, `ECOD`.
 - `results/03_comparison/` — the detailed AFdb-vs-PomBase tables, report,
   and Excel workbook.
@@ -126,7 +126,7 @@ registry-extract-plddt ───────────────────
         └────────────── registry-merge-domains ────────────────────┘
                                       │
                                       v
-                    registry-unify-segments ──> results/10_segments.tsv
+                    registry-unify-segments ──> results/11_segments.tsv
 ```
 
 The two UniProt snapshots are pinned resources. `02_uniprot.smk` provides
@@ -134,7 +134,7 @@ manual refresh rules that write candidates to `results/02_uniprot/`; they are
 not part of `rule all` (see `resources/README.md`).
 
 The DNA branch (`dna-bed` → `dna-map` → `dna-organize` → `dna-genome-bed`)
-reads the canonical annotated table and writes `results/11_dna/`. It is
+reads the canonical annotated table and writes `results/12_dna/`. It is
 maintained but is not part of the acceptance criteria.
 
 ## Provenance

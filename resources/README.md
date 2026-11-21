@@ -12,7 +12,7 @@ is tracked in git. The raw TED and ECOD dumps live under the reference root
 | `dy47073/protein_subset.txt` | manual | UniProt IDs of the DY47073 protein set (legacy) |
 
 The TED and ECOD PomBase subsets are pipeline outputs under
-`results/08_external/`; they are no longer committed resources.
+`results/10_external/`; they are no longer committed resources.
 
 The two UniProt tables are pinned snapshots queried on 2026-11-04. They are
 deliberately committed instead of fetched at run time so the `relationship`

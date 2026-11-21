@@ -16,10 +16,10 @@ Input
 
 Output
 ------
-- ``results/08_external/pombe_ted_segments.tsv``
-- ``results/08_external/pombe_ted_segments_full_columns.tsv``
-- ``results/08_external/pombe_ecod_segments.tsv``
-- ``results/08_external/pombe_ecod_segments_full_columns.tsv``
+- ``results/10_external/pombe_ted_segments.tsv``
+- ``results/10_external/pombe_ted_segments_full_columns.tsv``
+- ``results/10_external/pombe_ecod_segments.tsv``
+- ``results/10_external/pombe_ecod_segments_full_columns.tsv``
 """
 
 # =============================================================================

@@ -18,7 +18,7 @@ Output
 - ``results/01_afdb/03_afdb_entries.tsv``,
   ``results/04_registry/01_gene_structure_registry.tsv``,
   ``results/04_registry/03_registry_stats.tsv``, and
-  ``results/10_segments.tsv``.
+  ``results/11_segments.tsv``.
 
 Usage
 -----
@@ -85,10 +85,10 @@ PAE_TABLE = f"{RESULTS}/06_PAE_domain.tsv"
 PLDDT_TABLE = f"{RESULTS}/07_pLDDT_scores.tsv"
 REFORMATED_TABLE = f"{RESULTS}/08_reformated_PAE_domain.tsv"
 ANNOTATED_TABLE = f"{RESULTS}/09_annotated_PAE_domain.tsv"
-SEGMENTS_TABLE = f"{RESULTS}/10_segments.tsv"
+SEGMENTS_TABLE = f"{RESULTS}/11_segments.tsv"
 
 # External TED/ECOD subsets (rule 08, side branch).
-EXTERNAL_RESULTS = f"{RESULTS}/08_external"
+EXTERNAL_RESULTS = f"{RESULTS}/10_external"
 
 CURATED_VERSION = "registry_2026-06-01"
 

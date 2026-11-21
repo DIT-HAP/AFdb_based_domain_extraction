@@ -18,7 +18,7 @@ Four numbering schemes are used:
 > the v1 code in git history remain the only way to reproduce those tables.
 
 Canonical deliverables: **#4** (`04_registry/01_gene_structure_registry.tsv`)
-and **#10** (`10_segments.tsv`). **#1** (`03_afdb_entries.tsv`) is the
+and **#11** (`11_segments.tsv`). **#1** (`03_afdb_entries.tsv`) is the
 reusable AFdb inventory. Everything else is an intermediate or a diagnostic.
 
 ## Input branch
@@ -129,20 +129,28 @@ Producer: **R12** `registry_assign_type` → **S1** → **S3** → **S8**
 
 17,843 rows. Adds the segment type (`disordered`, `structured`, and so on).
 
-### 10. Unified segment table
+### 10. External TED/ECOD subsets
+
+Producers: **R14** `ted_pombe`, **R15** `ecod_pombe` → **S1** → **S3** → **S10**
+`src/external.py` → `results/10_external/`
+
+Selected-column and full-column TSVs for the PomBase TED/ECOD subsets. They
+feed the unified table in #11.
+
+### 11. Unified segment table
 
 Producer: **R13** `registry_unify_segments` → **S1** → **S3** → **S9**
-`src/unify.py` → `results/10_segments.tsv`
+`src/unify.py` → `results/11_segments.tsv`
 
 Inputs: the annotated PAE table above and the external TED/ECOD subsets in
-`results/08_external/` (R14/R15).
+`results/10_external/` (R14/R15).
 
 42,178 rows: PAE 20,711 + TED 11,983 + ECOD 9,484. This is the final delivery
 table; coordinates are 1-based inclusive.
 
 ## Archived
 
-### 11. Stale 2026-11-03 dataset outputs
+### A1. Stale 2026-11-03 dataset outputs
 
 Location: `tmp/afdb_vs_pombase/archive/stale_results_20261103/`
 
@@ -151,7 +159,7 @@ and `combined` (old dataset names). They were moved out of `results/` on
 2026-11-05. The rules that produced them were removed on 2026-11-19, so they
 can only be regenerated from git history.
 
-### 12. Pre-sequence-first baseline
+### A2. Pre-sequence-first baseline
 
 Location: `results/arc/`
 
@@ -162,7 +170,7 @@ outputs `04_domains/`, `05_PAE_domain.tsv`, `06_pLDDT_scores.tsv`,
 `09_segments.tsv`. The comparison and registry files were moved out of
 `results/` on 2026-11-11; the curated outputs, which derive from that earlier
 registry, were moved on 2026-11-16. All are kept for reference only; the
-active outputs are #3 and #4. Rerun the curated branch to produce #5–#10
+active outputs are #3 and #4. Rerun the curated branch to produce #5–#11
 under the current numbering.
 
 ## Appendix A — Rule index
@@ -185,13 +193,13 @@ but outside the acceptance criteria.
 | R10 | `registry_extract_plddt` | `rules/06_plddt.smk` | `registry-extract-plddt` | S1, S3, S7 | #7 |
 | R11 | `registry_merge_domains` | `rules/07_domains.smk` | `registry-merge-domains` | S1, S3, S8 | #8 |
 | R12 | `registry_assign_type` | `rules/07_domains.smk` | `assign-type` | S1, S3, S8 | #9 |
-| R13 | `registry_unify_segments` | `rules/09_unify.smk` | `registry-unify-segments` | S1, S3, S9 | #10 |
-| R14 | `ted_pombe` | `rules/08_external.smk` | `ted-pombe` | S1, S3, S10 | `results/08_external/pombe_ted_segments.tsv`, `results/08_external/pombe_ted_segments_full_columns.tsv` |
-| R15 | `ecod_pombe` | `rules/08_external.smk` | `ecod-pombe` | S1, S3, S10 | `results/08_external/pombe_ecod_segments.tsv`, `results/08_external/pombe_ecod_segments_full_columns.tsv` |
+| R13 | `registry_unify_segments` | `rules/09_unify.smk` | `registry-unify-segments` | S1, S3, S9 | #11 |
+| R14 | `ted_pombe` | `rules/08_external.smk` | `ted-pombe` | S1, S3, S10 | `results/10_external/pombe_ted_segments.tsv`, `results/10_external/pombe_ted_segments_full_columns.tsv` |
+| R15 | `ecod_pombe` | `rules/08_external.smk` | `ecod-pombe` | S1, S3, S10 | `results/10_external/pombe_ecod_segments.tsv`, `results/10_external/pombe_ecod_segments_full_columns.tsv` |
 | R16 | `dna_bed` | `rules/10_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
-| R17 | `dna_map` | `rules/10_dna.smk` | `dna-map` | S1, S3, S11 | `11_dna/DNA_domain.tsv` |
-| R18 | `dna_organize` | `rules/10_dna.smk` | `dna-organize` | S1, S3, S11 | `11_dna/merged_DNA_domain.tsv` |
-| R19 | `dna_genome_bed` | `rules/10_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `11_dna/domains.bed` |
+| R17 | `dna_map` | `rules/10_dna.smk` | `dna-map` | S1, S3, S11 | `12_dna/DNA_domain.tsv` |
+| R18 | `dna_organize` | `rules/10_dna.smk` | `dna-organize` | S1, S3, S11 | `12_dna/merged_DNA_domain.tsv` |
+| R19 | `dna_genome_bed` | `rules/10_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `12_dna/domains.bed` |
 
 ## Appendix B — Script index
 

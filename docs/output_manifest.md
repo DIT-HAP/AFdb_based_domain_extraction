@@ -18,8 +18,8 @@ canonical table per stage; v1 remains available in git history.
 | pLDDT tables | `<ds>_pLDDT_scores.tsv` | `registry-extract-plddt` | `results/07_pLDDT_scores.tsv` |
 | Reformatted domains | `<ds>_reformated_PAE_domain_based_on_pLDDT.tsv` | `registry-merge-domains` | `results/08_reformated_PAE_domain.tsv` |
 | Annotated domains | `<ds>_annotated_PAE_domain_based_on_pLDDT.tsv` | `assign-type` | `results/09_annotated_PAE_domain.tsv` |
-| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | `results/08_external/pombe_ted_segments.tsv` |
-| ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | `results/08_external/pombe_ecod_segments.tsv` |
+| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | `results/10_external/pombe_ted_segments.tsv` |
+| ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | `results/10_external/pombe_ecod_segments.tsv` |
 
 Both `ted-pombe` and `ecod-pombe` also write a full-column companion
 (`*_full_columns.tsv`) in the same pass.
@@ -34,9 +34,9 @@ The v1 datasets covered were `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
 | AFdb structure inventory | `results/01_afdb/*` | `afdb-*` |
 | AFdb/PomBase comparison | `results/03_comparison/*` | `compare-afdb-pombase` |
 | Gene structure registry | `results/04_registry/01_gene_structure_registry.tsv`, `results/04_registry/03_registry_stats.tsv` | `build-registry` |
-| Curated unified segments | `results/10_segments.tsv` | `registry-unify-segments` |
+| Curated unified segments | `results/11_segments.tsv` | `registry-unify-segments` |
 | Resource provenance | `resources/manifest.tsv` | `fetch-resources` |
-| DNA projections | `results/11_dna/DNA_domain.tsv`, `merged_DNA_domain.tsv`, `domains.bed` | `dna-*` |
+| DNA projections | `results/12_dna/DNA_domain.tsv`, `merged_DNA_domain.tsv`, `domains.bed` | `dna-*` |
 
 ## Archived, not reproduced
 
