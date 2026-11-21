@@ -49,7 +49,7 @@ src/                          Functional core + typer CLI
 scripts/afdb_domains.py       Thin executable shell
 scripts/compare_afdb_pombase.py Standalone comparison script
 resources/                    PomBase-only curated inputs tracked in git
-data/                         Working directory (git-ignored)
+data/                         Working directory, created on demand (git-ignored)
 results/                      Pipeline outputs (git-ignored)
 tests/                        Unit tests
 ```
