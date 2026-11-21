@@ -134,6 +134,9 @@ Producer: **R12** `registry_assign_type` → **S1** → **S3** → **S8**
 Producer: **R13** `registry_unify_segments` → **S1** → **S3** → **S9**
 `src/unify.py` → `results/10_segments.tsv`
 
+Inputs: the annotated PAE table above and the external TED/ECOD subsets in
+`results/08_external/` (R14/R15).
+
 42,178 rows: PAE 20,711 + TED 11,983 + ECOD 9,484. This is the final delivery
 table; coordinates are 1-based inclusive.
 
@@ -183,8 +186,8 @@ but outside the acceptance criteria.
 | R11 | `registry_merge_domains` | `rules/07_domains.smk` | `registry-merge-domains` | S1, S3, S8 | #8 |
 | R12 | `registry_assign_type` | `rules/07_domains.smk` | `assign-type` | S1, S3, S8 | #9 |
 | R13 | `registry_unify_segments` | `rules/09_unify.smk` | `registry-unify-segments` | S1, S3, S9 | #10 |
-| R14 | `ted_pombe` | `rules/08_external.smk` | `ted-pombe` | S1, S3, S10 | `resources/ted/pombe_ted_segments.tsv` |
-| R15 | `ecod_pombe` | `rules/08_external.smk` | `ecod-pombe` | S1, S3, S10 | `resources/ecod/pombe_ecod_segments.tsv` |
+| R14 | `ted_pombe` | `rules/08_external.smk` | `ted-pombe` | S1, S3, S10 | `results/08_external/pombe_ted_segments.tsv`, `results/08_external/pombe_ted_segments_full_columns.tsv` |
+| R15 | `ecod_pombe` | `rules/08_external.smk` | `ecod-pombe` | S1, S3, S10 | `results/08_external/pombe_ecod_segments.tsv`, `results/08_external/pombe_ecod_segments_full_columns.tsv` |
 | R16 | `dna_bed` | `rules/10_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
 | R17 | `dna_map` | `rules/10_dna.smk` | `dna-map` | S1, S3, S11 | `11_dna/DNA_domain.tsv` |
 | R18 | `dna_organize` | `rules/10_dna.smk` | `dna-organize` | S1, S3, S11 | `11_dna/merged_DNA_domain.tsv` |

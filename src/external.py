@@ -5,7 +5,8 @@ PomBase subsets of TED and ECOD.
 The upstream TED dump covers all eukaryotes and is hundreds of gigabytes; the
 ECOD dump is the eukaryotic subset. Both builders stream the raw dump once and
 keep only the proteins in the PomBase gene table, producing small resources
-that can be committed.
+that can be committed. Each also writes a full-column copy of every kept raw
+row.
 
 Input
 -----
@@ -15,8 +16,10 @@ Input
 
 Output
 ------
-- ``resources/ted/pombe_ted_segments.tsv``
-- ``resources/ecod/pombe_ecod_segments.tsv``
+- ``results/08_external/pombe_ted_segments.tsv``
+- ``results/08_external/pombe_ted_segments_full_columns.tsv``
+- ``results/08_external/pombe_ecod_segments.tsv``
+- ``results/08_external/pombe_ecod_segments_full_columns.tsv``
 """
 
 # =============================================================================
@@ -94,19 +97,25 @@ def stream_ted_matches(ted_path: Path, keep_ids: set[str]) -> list[list[str]]:
     return kept
 
 
-def build_ted_table(ted_path: Path, gene_path: Path, output_path: Path) -> None:
-    """Build the PomBase subset of the TED domain dump."""
+def build_ted_table(
+    ted_path: Path, gene_path: Path, output_path: Path, full_output_path: Path
+) -> None:
+    """Build the PomBase subset of the TED dump and its full-column copy."""
     keep_ids = load_pombase_uniprot_ids(gene_path)
     rows = stream_ted_matches(ted_path, keep_ids)
     frame = pd.DataFrame.from_records(rows, columns=TED_COLUMNS)
     frame["uniprot_id"] = frame["ted_id"].str.extract(TED_ID_PATTERN, expand=False)
     write_tsv(frame[TED_OUTPUT_COLUMNS], output_path)
+    write_tsv(frame[TED_COLUMNS], full_output_path)
 
 
-def build_ecod_table(ecod_path: Path, gene_path: Path, output_path: Path) -> None:
-    """Build the PomBase subset of the ECOD domain dump."""
+def build_ecod_table(
+    ecod_path: Path, gene_path: Path, output_path: Path, full_output_path: Path
+) -> None:
+    """Build the PomBase subset of the ECOD dump and its full-column copy."""
     keep_ids = load_pombase_uniprot_ids(gene_path)
     ecod = pd.read_csv(ecod_path, sep=r"\s+", header=None, names=ECOD_COLUMNS, low_memory=False)
     ecod["uniprot_id"] = ecod["Protein"].str.removesuffix("_F1")
     filtered = ecod.loc[ecod["uniprot_id"].isin(keep_ids)]
     write_tsv(filtered[ECOD_OUTPUT_COLUMNS], output_path)
+    write_tsv(filtered[ECOD_COLUMNS], full_output_path)

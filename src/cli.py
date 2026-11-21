@@ -342,9 +342,10 @@ def ted_pombe(
     ted_dump: Path = typer.Option(..., help="TED detailed dump."),
     gene_table: Path = typer.Option(..., help="PomBase gene table."),
     output: Path = typer.Option(..., help="Output PomBase TED table."),
+    full_output: Path = typer.Option(..., help="Output with every raw TED column."),
 ) -> None:
     """Extract the PomBase subset of the TED dump."""
-    build_ted_table(ted_dump, gene_table, output)
+    build_ted_table(ted_dump, gene_table, output, full_output)
 
 
 @app.command("ecod-pombe")
@@ -352,9 +353,10 @@ def ecod_pombe(
     ecod_dump: Path = typer.Option(..., help="ECOD domain dump."),
     gene_table: Path = typer.Option(..., help="PomBase gene table."),
     output: Path = typer.Option(..., help="Output PomBase ECOD table."),
+    full_output: Path = typer.Option(..., help="Output with every raw ECOD column."),
 ) -> None:
     """Extract the PomBase subset of the ECOD dump."""
-    build_ecod_table(ecod_dump, gene_table, output)
+    build_ecod_table(ecod_dump, gene_table, output, full_output)
 
 
 # =============================================================================

@@ -88,17 +88,19 @@ inventory; PAE files without a CIF entry are reported and ignored.
 
 ## Resource policy
 
-- `resources/` holds small PomBase-only inputs that the pipeline reads directly
-  and that are committed: PomBase tables, the TED/ECOD PomBase subsets, and the
-  provenance manifest. The archived DY47073 protein subset is kept for reference.
+- `resources/` holds small, committed PomBase-only tables: the inputs the
+  pipeline reads directly (PomBase tables and UniProt snapshots) and the
+  provenance manifest. The archived DY47073 protein subset is kept for
+  reference.
 - Raw upstream dumps live under the reference root
   (`/hugedata/YushengYang/AFdb`): the 128G TED domain summary, the 27G TED
   per-chain segmentation, the 31M ECOD dump, and the AlphaFold structures,
   PAE, and selected predictions. `config/config.yaml` points at them; nothing
   large is committed.
 - `ted-pombe` and `ecod-pombe` stream the raw dumps and write the PomBase
-  subsets into `resources/`, so the extraction is reproducible from the
-  workflow alone.
+  subsets (selected columns plus a full-column companion) into
+  `results/08_external/`, so the extraction is reproducible from the workflow
+  alone.
 - `fetch-resources` records size and SHA-256 (files under 50MB) for every
   configured resource.
 - The two UniProt tables stay committed snapshots. `02_uniprot.smk` adds

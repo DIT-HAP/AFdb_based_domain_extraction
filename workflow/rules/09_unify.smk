@@ -3,8 +3,8 @@
 rule registry_unify_segments:
     input:
         pae_table=rules.registry_assign_type.output.table,
-        ted_table=ancient(f"{RESOURCES}/ted/pombe_ted_segments.tsv"),
-        ecod_table=ancient(f"{RESOURCES}/ecod/pombe_ecod_segments.tsv"),
+        ted_table=f"{EXTERNAL_RESULTS}/pombe_ted_segments.tsv",
+        ecod_table=f"{EXTERNAL_RESULTS}/pombe_ecod_segments.tsv",
         registry=rules.build_registry.output.registry,
     output:
         SEGMENTS_TABLE,

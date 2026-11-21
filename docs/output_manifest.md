@@ -18,8 +18,11 @@ canonical table per stage; v1 remains available in git history.
 | pLDDT tables | `<ds>_pLDDT_scores.tsv` | `registry-extract-plddt` | `results/07_pLDDT_scores.tsv` |
 | Reformatted domains | `<ds>_reformated_PAE_domain_based_on_pLDDT.tsv` | `registry-merge-domains` | `results/08_reformated_PAE_domain.tsv` |
 | Annotated domains | `<ds>_annotated_PAE_domain_based_on_pLDDT.tsv` | `assign-type` | `results/09_annotated_PAE_domain.tsv` |
-| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | `resources/ted/pombe_ted_segments.tsv` |
-| ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | `resources/ecod/pombe_ecod_segments.tsv` |
+| TED PomBase subset | `references/TED/pombe_ted_domains_detailed.tsv` | `ted-pombe` | `results/08_external/pombe_ted_segments.tsv` |
+| ECOD PomBase subset | `references/ECOD/pombe_ECOD_domains.tsv` | `ecod-pombe` | `results/08_external/pombe_ecod_segments.tsv` |
+
+Both `ted-pombe` and `ecod-pombe` also write a full-column companion
+(`*_full_columns.tsv`) in the same pass.
 
 The v1 datasets covered were `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
 `LocalAF2_DY47073Annotation`, `AF3_LongProt`, `DY47073_ProteinSubset`.

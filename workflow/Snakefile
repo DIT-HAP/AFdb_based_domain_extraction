@@ -87,6 +87,9 @@ REFORMATED_TABLE = f"{RESULTS}/08_reformated_PAE_domain.tsv"
 ANNOTATED_TABLE = f"{RESULTS}/09_annotated_PAE_domain.tsv"
 SEGMENTS_TABLE = f"{RESULTS}/10_segments.tsv"
 
+# External TED/ECOD subsets (rule 08, side branch).
+EXTERNAL_RESULTS = f"{RESULTS}/08_external"
+
 CURATED_VERSION = "registry_2026-06-01"
 
 

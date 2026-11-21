@@ -5,14 +5,16 @@ rule ted_pombe:
         ted_dump=TED_DUMP,
         gene_table=ancient(FEATURES_GENE_TABLE),
     output:
-        f"{RESOURCES}/ted/pombe_ted_segments.tsv",
+        table=f"{EXTERNAL_RESULTS}/pombe_ted_segments.tsv",
+        full=f"{EXTERNAL_RESULTS}/pombe_ted_segments_full_columns.tsv",
     params:
         cli=str(CLI),
     conda:
         CORE_ENV
     shell:
         "python {params.cli} ted-pombe --ted-dump {input.ted_dump} "
-        "--gene-table {input.gene_table} --output {output}"
+        "--gene-table {input.gene_table} --output {output.table} "
+        "--full-output {output.full}"
 
 
 rule ecod_pombe:
@@ -20,11 +22,13 @@ rule ecod_pombe:
         ecod_dump=ECOD_DUMP,
         gene_table=ancient(FEATURES_GENE_TABLE),
     output:
-        f"{RESOURCES}/ecod/pombe_ecod_segments.tsv",
+        table=f"{EXTERNAL_RESULTS}/pombe_ecod_segments.tsv",
+        full=f"{EXTERNAL_RESULTS}/pombe_ecod_segments_full_columns.tsv",
     params:
         cli=str(CLI),
     conda:
         CORE_ENV
     shell:
         "python {params.cli} ecod-pombe --ecod-dump {input.ecod_dump} "
-        "--gene-table {input.gene_table} --output {output}"
+        "--gene-table {input.gene_table} --output {output.table} "
+        "--full-output {output.full}"
