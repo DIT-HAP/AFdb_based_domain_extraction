@@ -43,8 +43,7 @@ workflow/rules/06_plddt.smk    Registry pLDDT extraction
 workflow/rules/07_domains.smk  Domain merging and type annotation
 workflow/rules/08_external.smk TED/ECOD PomBase subsets
 workflow/rules/09_unify.smk    Unified PAE + TED + ECOD segments
-workflow/rules/10_confident.smk Confident-domain side branch
-workflow/rules/11_dna.smk      DNA projection branch
+workflow/rules/10_dna.smk      DNA projection branch
 workflow/envs/                Driver environment and the shared rule environment
 src/                          Functional core + typer CLI
 scripts/afdb_domains.py       Thin executable shell
@@ -135,10 +134,8 @@ manual refresh rules that write candidates to `results/02_uniprot/`; they are
 not part of `rule all` (see `resources/README.md`).
 
 The DNA branch (`dna-bed` → `dna-map` → `dna-organize` → `dna-genome-bed`)
-reads the canonical annotated table and writes `results/12_dna/`. The
-3D-AF-Surfer branch (`registry-confident-domains`) reads the canonical pLDDT
-table plus the registry and writes `results/11_confident_domains.tsv`. Both are
-maintained but are not part of the acceptance criteria.
+reads the canonical annotated table and writes `results/11_dna/`. It is
+maintained but is not part of the acceptance criteria.
 
 ## Provenance
 

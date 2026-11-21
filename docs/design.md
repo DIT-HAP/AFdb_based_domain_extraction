@@ -73,8 +73,7 @@ Rules are grouped by pipeline stage, one file per stage, in `workflow/rules/`:
 | `07_domains.smk` | Domain merging and type annotation |
 | `08_external.smk` | TED/ECOD PomBase subsets |
 | `09_unify.smk` | Unified PAE + TED + ECOD segments |
-| `10_confident.smk` | Confident-domain side branch (not in `rule all`) |
-| `11_dna.smk` | DNA projection branch |
+| `10_dna.smk` | DNA projection branch |
 
 The root `Snakefile` holds the configuration, the shared numbered result path
 constants, the stage includes, and `rule all`. The canonical registry reads the
@@ -136,8 +135,8 @@ segment_class, family, location
   notebook that produced them are archived in `v1-legacy`.
 - The exploratory notebooks are archived. Their deterministic logic moved into
   CLI subcommands and Snakemake rules.
-- The DNA branch and the 3D-AF-Surfer confident-domain branch are maintained
-  and runnable, but they are not part of the acceptance criteria.
+- The DNA branch is maintained and runnable, but it is not part of the
+  acceptance criteria.
 
 ## Verification
 
@@ -147,7 +146,6 @@ segment_class, family, location
 | LocalAF2_DY47073Annotation | Exact on intervals, lengths, fractions, types; 2 rows differ by ±0.01 mean_pLDDT |
 | LocalAF2_PomBaseDiffAFdb | Exact on the same fields; 3 rows differ by ±0.01 mean_pLDDT (after pinning the 2024-03-05 input release) |
 | AFDB v4 | PAE and pLDDT tables exact; 17,851 unique domains after removing 9 duplicate legacy rows; 68 rows differ by ±0.01 mean_pLDDT; 42 rows differ only by the intended UniProt fallback in `Systematic ID` |
-| confident-domains | 20,554 unique rows match the legacy table; the legacy file duplicated 3 proteins and drifted by ±0.01 on 45 rows |
 
 The `Systematic ID` fallback is present in the current v1 `merge_PAE_domains.py`
 but missing from the 2023 output file. v2 follows the current script: unmapped

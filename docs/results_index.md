@@ -8,7 +8,7 @@ Four numbering schemes are used:
 - `#n` — output file or directory; the number is also the on-disk filename
   prefix (`01_afdb/`, `04_registry/`, ...).
 - `Rn` — Snakemake rule (Appendix A); rule files are numbered
-  `workflow/rules/01_afdb.smk`–`11_dna.smk`.
+  `workflow/rules/01_afdb.smk`–`10_dna.smk`.
 - `Sn` — script or Python module (Appendix B).
 - `Dn` — dataset declaration (Appendix C), defined in the `datasets` block of
   `config/config.yaml` and loaded by `src/files.py`.
@@ -165,9 +165,8 @@ under the current numbering.
 ## Appendix A — Rule index
 
 `R1`–`R13` form the active canonical chain. `R4`/`R5` are auxiliary refresh
-rules outside `rule all`; `R14` is the confident-domain branch, also outside
-`rule all`. `R17`–`R20` are the DNA branch, which is maintained but outside the
-acceptance criteria.
+rules outside `rule all`. `R16`–`R19` are the DNA branch, which is maintained
+but outside the acceptance criteria.
 
 | # | Rule | Snakefile | Entry point | Script(s) | Produces |
 |---|---|---|---|---|---|
@@ -184,29 +183,28 @@ acceptance criteria.
 | R11 | `registry_merge_domains` | `rules/07_domains.smk` | `registry-merge-domains` | S1, S3, S8 | #8 |
 | R12 | `registry_assign_type` | `rules/07_domains.smk` | `assign-type` | S1, S3, S8 | #9 |
 | R13 | `registry_unify_segments` | `rules/09_unify.smk` | `registry-unify-segments` | S1, S3, S9 | #10 |
-| R14 | `registry_confident_domains` | `rules/10_confident.smk` | `registry-confident-domains` | S1, S3, S8 | `results/11_confident_domains.tsv` |
-| R15 | `ted_pombe` | `rules/08_external.smk` | `ted-pombe` | S1, S3, S10 | `resources/ted/pombe_ted_segments.tsv` |
-| R16 | `ecod_pombe` | `rules/08_external.smk` | `ecod-pombe` | S1, S3, S10 | `resources/ecod/pombe_ecod_segments.tsv` |
-| R17 | `dna_bed` | `rules/11_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
-| R18 | `dna_map` | `rules/11_dna.smk` | `dna-map` | S1, S3, S11 | `12_dna/DNA_domain.tsv` |
-| R19 | `dna_organize` | `rules/11_dna.smk` | `dna-organize` | S1, S3, S11 | `12_dna/merged_DNA_domain.tsv` |
-| R20 | `dna_genome_bed` | `rules/11_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `12_dna/domains.bed` |
+| R14 | `ted_pombe` | `rules/08_external.smk` | `ted-pombe` | S1, S3, S10 | `resources/ted/pombe_ted_segments.tsv` |
+| R15 | `ecod_pombe` | `rules/08_external.smk` | `ecod-pombe` | S1, S3, S10 | `resources/ecod/pombe_ecod_segments.tsv` |
+| R16 | `dna_bed` | `rules/10_dna.smk` | `dna-bed` | S1, S3, S11 | `data/nucleotide_bed.tsv` |
+| R17 | `dna_map` | `rules/10_dna.smk` | `dna-map` | S1, S3, S11 | `11_dna/DNA_domain.tsv` |
+| R18 | `dna_organize` | `rules/10_dna.smk` | `dna-organize` | S1, S3, S11 | `11_dna/merged_DNA_domain.tsv` |
+| R19 | `dna_genome_bed` | `rules/10_dna.smk` | `dna-genome-bed` | S1, S3, S11 | `11_dna/domains.bed` |
 
 ## Appendix B — Script index
 
 | # | Script | Role | Used by |
 |---|---|---|---|
-| S1 | `scripts/afdb_domains.py` | Executable shell; adds the repo root to `sys.path` and calls `src.cli.main` | R1–R5, R7–R20 |
+| S1 | `scripts/afdb_domains.py` | Executable shell; adds the repo root to `sys.path` and calls `src.cli.main` | R1–R5, R7–R19 |
 | S2 | `scripts/compare_afdb_pombase.py` | Standalone AFdb-vs-PomBase comparison; writes tables, report, and workbook | R6 |
-| S3 | `src/cli.py` | Typer application; one subcommand per stage, exit-code handling | R1–R5, R7–R20 |
+| S3 | `src/cli.py` | Typer application; one subcommand per stage, exit-code handling | R1–R5, R7–R19 |
 | S4 | `src/files.py` | Config loading, logging, TSV read/write, required-column checks | All CLI commands |
 | S5 | `src/registry.py` | Structure selection, sequence matching, registry assembly | R7 |
 | S6 | `src/pae.py` | PAE parsing/clustering, `.domain` files, domain table | R8, R9 |
-| S7 | `src/plddt.py` | pLDDT extraction, interval utilities, domain statistics | R10, R14 |
-| S8 | `src/segments.py` | Domain merge, type annotation, confident-domain caller | R11, R12, R14 |
+| S7 | `src/plddt.py` | pLDDT extraction, interval utilities, domain statistics | R10 |
+| S8 | `src/segments.py` | Domain merge and type annotation | R11, R12 |
 | S9 | `src/unify.py` | Segment loading, PomBase annotation, unified table | R13 |
-| S10 | `src/external.py` | PomBase subsets of the TED and ECOD dumps | R15, R16 |
-| S11 | `src/dna.py` | GFF parsing, nucleotide projection, merged BED | R17–R20 |
+| S10 | `src/external.py` | PomBase subsets of the TED and ECOD dumps | R14, R15 |
+| S11 | `src/dna.py` | GFF parsing, nucleotide projection, merged BED | R16–R19 |
 | S12 | `src/afdb.py` | CIF/PAE scanning and the AFdb entry inventory | R1–R3 |
 | S13 | `src/uniprot.py` | UniProt REST fetch and refresh assembly | R4, R5 |
 

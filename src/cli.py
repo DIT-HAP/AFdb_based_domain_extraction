@@ -54,7 +54,6 @@ from src.plddt import build_plddt_table_from_registry
 from src.registry import RegistryPaths, build_registry
 from src.segments import (
     annotate_table,
-    build_confident_table_from_registry,
     build_reformated_table_from_registry,
 )
 from src.unify import unify_segments_from_registry
@@ -298,19 +297,6 @@ def assign_type(
 ) -> None:
     """Assign domain location and domain/disordered type."""
     annotate_table(input_table, load_config(config).parameters, output)
-
-
-@app.command("registry-confident-domains")
-def registry_confident_domains(
-    plddt_table: Path = typer.Option(..., help="pLDDT table."),
-    registry: Path = typer.Option(..., help="Gene structure registry."),
-    output: Path = typer.Option(..., help="Output confident-domain table."),
-    config: Path = typer.Option(DEFAULT_CONFIG, help="Project configuration file."),
-) -> None:
-    """Run the independent 3D-AF-Surfer style confident-domain caller."""
-    build_confident_table_from_registry(
-        plddt_table, registry, load_config(config).parameters, output
-    )
 
 
 @app.command("dna-bed")

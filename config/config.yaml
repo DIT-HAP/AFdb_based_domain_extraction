@@ -71,5 +71,3 @@ parameters:
   resolution: 0.5
   plddt_threshold: 70.0
   merge_gap: 11
-  confident_min_length: 50
-  confident_merge_gap: 6

@@ -7,7 +7,7 @@ includes, and the default target.
 
 Rules live in ``workflow/rules/<nn>_<stage>.smk``, one file per pipeline stage:
 AFdb extraction, UniProt refresh, comparison, registry, PAE clustering, pLDDT,
-domain merging, TED/ECOD subsets, unification, and the two optional branches.
+domain merging, TED/ECOD subsets, unification, and the optional DNA branch.
 
 Input
 -----
@@ -86,7 +86,6 @@ PLDDT_TABLE = f"{RESULTS}/07_pLDDT_scores.tsv"
 REFORMATED_TABLE = f"{RESULTS}/08_reformated_PAE_domain.tsv"
 ANNOTATED_TABLE = f"{RESULTS}/09_annotated_PAE_domain.tsv"
 SEGMENTS_TABLE = f"{RESULTS}/10_segments.tsv"
-CONFIDENT_TABLE = f"{RESULTS}/11_confident_domains.tsv"
 
 CURATED_VERSION = "registry_2026-06-01"
 
@@ -100,8 +99,7 @@ include: "rules/06_plddt.smk"
 include: "rules/07_domains.smk"
 include: "rules/08_external.smk"
 include: "rules/09_unify.smk"
-include: "rules/10_confident.smk"
-include: "rules/11_dna.smk"
+include: "rules/10_dna.smk"
 
 
 rule all:

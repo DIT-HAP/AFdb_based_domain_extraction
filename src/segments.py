@@ -10,17 +10,13 @@ Implements the three-step domain refinement that defined the legacy results:
    than ``merge_gap`` residues.
 3. Remove merged regions that overlap with a confident contiguous domain.
 
-The same module also implements the independent 3D-AF-Surfer style confident
-domain caller.
-
 Input
 -----
 - PAE domain table, pLDDT table, and the gene structure registry.
 
 Output
 ------
-- Reformatted domain table, its annotated variant, and the confident-domain
-  table.
+- Reformatted domain table and its annotated variant.
 """
 
 # =============================================================================
@@ -53,15 +49,6 @@ REFORMATED_COLUMNS = [
     "version",
     "domain_id",
     "domain_residues",
-    "protein_length",
-    *STAT_COLUMNS,
-]
-CONFIDENT_COLUMNS = [
-    "Systematic ID",
-    "uniprot_id",
-    "domain_id",
-    "domain_residues",
-    "domain_type",
     "protein_length",
     *STAT_COLUMNS,
 ]
@@ -295,88 +282,3 @@ def annotate_table(input_path: Path, parameters: PipelineParameters, output_path
     require_columns(frame, [*REFORMATED_COLUMNS], input_path)
     annotated = assign_type(frame, parameters.plddt_threshold)
     write_tsv(annotated, output_path)
-
-
-def _confident_intervals(values: np.ndarray, threshold: float, min_length: int) -> list[str]:
-    """Find contiguous confident runs at least ``min_length`` residues long."""
-    mask = values >= threshold
-    edges = np.diff(np.concatenate(([0], mask.astype(np.int8), [0])))
-    starts = np.where(edges == 1)[0]
-    ends = np.where(edges == -1)[0] - 1
-    lengths = ends - starts + 1
-    return [
-        f"{int(start) + 1}-{int(end) + 1}"
-        for start, end, length in zip(starts, ends, lengths, strict=True)
-        if length >= min_length
-    ]
-
-
-def _complement(intervals: list[str], protein_length: int) -> list[str]:
-    """Return the intervals not covered by ``intervals``."""
-    result: list[str] = []
-    cursor = 1
-    for interval in intervals:
-        start, end = (int(value) for value in interval.split("-"))
-        if cursor < start:
-            result.append(f"{cursor}-{start - 1}")
-        cursor = end + 1
-    if cursor <= protein_length:
-        result.append(f"{cursor}-{protein_length}")
-    return result
-
-
-def _confident_records(plddt: pd.DataFrame, parameters: PipelineParameters) -> pd.DataFrame:
-    """Build confident and non-confident segment records for every protein."""
-    records = []
-    for gene, values_text in zip(plddt["gene_systematic_id"], plddt["pLDDT"], strict=True):
-        values = np.asarray(values_text.split(","), dtype=float)
-        confident = merge_intervals(
-            _confident_intervals(
-                values, parameters.plddt_threshold, parameters.confident_min_length
-            ),
-            gap=parameters.confident_merge_gap,
-        )
-        non_confident = _complement(confident, len(values))
-        records.extend(
-            {
-                "gene_systematic_id": gene,
-                "protein_length": len(values),
-                "domain_residues": interval,
-                "domain_type": "confident",
-            }
-            for interval in confident
-        )
-        records.extend(
-            {
-                "gene_systematic_id": gene,
-                "protein_length": len(values),
-                "domain_residues": interval,
-                "domain_type": "",
-            }
-            for interval in non_confident
-        )
-    return pd.DataFrame.from_records(records)
-
-
-def build_confident_table_from_registry(
-    plddt_path: Path,
-    registry_path: Path,
-    parameters: PipelineParameters,
-    output_path: Path,
-) -> None:
-    """Build the 3D-AF-Surfer style confident-domain table from registry selections."""
-    plddt = read_tsv(plddt_path)
-    registry = read_tsv(registry_path)
-    require_columns(plddt, REGISTRY_PLDDT_REQUIRED, plddt_path)
-    require_columns(registry, REGISTRY_REQUIRED, registry_path)
-
-    id_column = "gene_systematic_id"
-    records = _confident_records(plddt, parameters)
-    records["_start"] = records["domain_residues"].str.split("-").str[0].astype(int)
-    records = records.sort_values([id_column, "_start"], kind="stable").drop(columns="_start")
-    records["domain_id"] = records.groupby(id_column, sort=False).cumcount() + 1
-
-    lookup = build_plddt_lookup(plddt, id_column=id_column)
-    records = attach_stats(records, lookup, parameters.plddt_threshold, id_column=id_column)
-    annotated = _join_registry_annotation(records, registry)
-    write_tsv(annotated[CONFIDENT_COLUMNS], output_path)

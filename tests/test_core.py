@@ -5,14 +5,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from src.dna import organize_domains
-from src.files import PipelineParameters, load_config, write_tsv
+from src.files import PipelineParameters, load_config
 from src.pae import domain_file_to_runs, parse_domain_filename
 from src.plddt import check_overlap, domain_stats, merge_intervals
-from src.segments import (
-    assign_type,
-    build_confident_table_from_registry,
-    build_reformated_frame,
-)
+from src.segments import assign_type, build_reformated_frame
 from src.unify import attach_pombase_annotation, expand_intervals
 
 PARAMETERS = PipelineParameters(
@@ -21,8 +17,6 @@ PARAMETERS = PipelineParameters(
     resolution=0.5,
     plddt_threshold=70.0,
     merge_gap=11,
-    confident_min_length=50,
-    confident_merge_gap=6,
 )
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
@@ -145,31 +139,6 @@ def test_build_reformated_frame_uses_registry_gene_id() -> None:
     assert result["gene_systematic_id"].tolist() == ["g1", "g1"]
     assert result["domain_residues"].tolist() == ["1-3", "4-6"]
     assert "uniprot_id" not in result.columns
-
-
-def test_build_confident_table_from_registry_uses_gene_id(tmp_path: Path) -> None:
-    plddt = pd.DataFrame(
-        {
-            "gene_systematic_id": ["g1"],
-            "protein_length": [120],
-            "pLDDT": [",".join(["90"] * 60 + ["50"] * 60)],
-        }
-    )
-    registry = pd.DataFrame({"gene_systematic_id": ["g1"], "uniprot_id": ["P1"]})
-    plddt_path = tmp_path / "plddt.tsv"
-    registry_path = tmp_path / "registry.tsv"
-    output_path = tmp_path / "confident.tsv"
-    write_tsv(plddt, plddt_path)
-    write_tsv(registry, registry_path)
-
-    build_confident_table_from_registry(plddt_path, registry_path, PARAMETERS, output_path)
-
-    result = pd.read_csv(output_path, sep="\t", keep_default_na=False)
-    assert result["Systematic ID"].tolist() == ["g1", "g1"]
-    assert result["uniprot_id"].tolist() == ["P1", "P1"]
-    assert result["domain_residues"].tolist() == ["1-60", "61-120"]
-    assert result["domain_type"].tolist() == ["confident", ""]
-    assert result["protein_length"].tolist() == [120, 120]
 
 
 def test_organize_domains(tmp_path: Path) -> None:

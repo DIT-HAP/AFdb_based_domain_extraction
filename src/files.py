@@ -70,8 +70,6 @@ class PipelineParameters:
     resolution: float
     plddt_threshold: float
     merge_gap: int
-    confident_min_length: int
-    confident_merge_gap: int
 
 
 def _resolve_spec(spec: str, roots: dict[str, Path]) -> Path:
@@ -171,8 +169,6 @@ def load_config(config_path: Path) -> AppConfig:
             resolution=float(parameters["resolution"]),
             plddt_threshold=float(parameters["plddt_threshold"]),
             merge_gap=int(parameters["merge_gap"]),
-            confident_min_length=int(parameters["confident_min_length"]),
-            confident_merge_gap=int(parameters["confident_merge_gap"]),
         ),
     )
 
