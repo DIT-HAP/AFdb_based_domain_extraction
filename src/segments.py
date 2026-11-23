@@ -259,10 +259,11 @@ def build_reformated_table_from_registry(
 
 def assign_type(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
     """Assign N/C-terminal location and domain/disordered type."""
-    first_interval = frame["domain_residues"].str.split(",").str[0]
-    last_interval = frame["domain_residues"].str.split(",").str[-1]
-    start = first_interval.str.split("-").str[0].astype(int)
-    end = last_interval.str.split("-").str[1].astype(int)
+    bounds = (
+        frame["domain_residues"].str.split(",").explode().str.split("-", expand=True).astype(int)
+    )
+    start = bounds[0].groupby(level=0).min()
+    end = bounds[1].groupby(level=0).max()
     spans_whole = frame["domain_length"] == frame["protein_length"]
     at_n_terminus = (start == 1) & (end != frame["protein_length"])
     at_c_terminus = (start != 1) & (end == frame["protein_length"])

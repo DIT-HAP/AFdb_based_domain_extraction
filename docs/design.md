@@ -93,16 +93,17 @@ inventory; PAE files without a CIF entry are reported and ignored.
   provenance manifest. The archived DY47073 protein subset is kept for
   reference.
 - Raw upstream dumps live under the reference root
-  (`/hugedata/YushengYang/AFdb`): the 128G TED domain summary, the 27G TED
-  per-chain segmentation, the 31M ECOD dump, and the AlphaFold structures,
-  PAE, and selected predictions. `config/config.yaml` points at them; nothing
-  large is committed.
+  (`/hugedata/YushengYang/AFdb`): the 128G TED domain summary, the 31M ECOD
+  dump, and the AlphaFold structures, PAE, and selected predictions. The 27G
+  TED per-chain segmentation is retained for reference but no rule reads it.
+  `config/config.yaml` points at them; nothing large is committed.
 - `ted-pombe` and `ecod-pombe` stream the raw dumps and write the PomBase
   subsets (selected columns plus a full-column companion) into
   `results/10_external/`, so the extraction is reproducible from the workflow
   alone.
-- `fetch-resources` records size and SHA-256 (files under 50MB) for every
-  configured resource.
+- `fetch-resources` records size and SHA-256 (files under 50MB) for the
+  PomBase and TED/ECOD inputs it loads; the UniProt snapshots are pinned
+  separately in `resources/uniprot/`.
 - The two UniProt tables stay committed snapshots. `02_uniprot.smk` adds
   `refresh_uniprot_triangulation` and `refresh_uniprot_resolution`; both are
   manual rules outside `rule all`, write minimal-column candidates to
@@ -125,11 +126,12 @@ segment_class, family, location
 - Coordinates are 1-based inclusive; `length = end - start + 1`.
 - Multi-interval domains are exploded; `segment_part` numbers the parts.
 - Missing values are empty strings in the TSV.
-- The three sources are concatenated, not inner-joined, because only 4,216 of
-  the 5,128 AFDB proteins have both TED and ECOD assignments.
-- TED and ECOD are filtered to the proteins predicted by the dataset. A
-  LocalAF2_DY47073Annotation table (71 proteins) therefore has 700 rows, not
-  the 22k rows of a full-proteome table.
+- The three sources are concatenated, not inner-joined: of the 5,119 analysed
+  genes, 4,950 pass `ted_ecod_coordinate_ok`, and only 4,076 proteins carry
+  both a TED and an ECOD assignment (4,686 have TED, 4,144 have ECOD).
+- TED and ECOD are filtered to the registry proteins with `in_analysis` and
+  `ted_ecod_coordinate_ok` before concatenation, so the unified table describes
+  the selected structures rather than the full proteome.
 
 ## Scope
 

@@ -81,6 +81,25 @@ def test_expand_intervals() -> None:
     assert expanded["segment_part"].tolist() == [1, 2]
 
 
+def test_expand_intervals_parts_reset_per_gene() -> None:
+    frame = pd.DataFrame(
+        {
+            "systematic_id": ["g1", "g2"],
+            "uniprot_id": ["P1", "P1"],
+            "segment_id": ["1", "1"],
+            "domain_residues": ["1-5,10-12", "1-5,10-12"],
+        }
+    )
+    expanded = expand_intervals(
+        frame,
+        "domain_residues",
+        ",",
+        group_columns=("systematic_id", "uniprot_id", "segment_id"),
+    )
+    parts = expanded.groupby("systematic_id")["segment_part"].apply(list).to_dict()
+    assert parts == {"g1": [1, 2], "g2": [1, 2]}
+
+
 def test_attach_pombase_annotation_fills_blank_gene_name() -> None:
     frame = pd.DataFrame(
         {
@@ -104,6 +123,29 @@ def test_attach_pombase_annotation_fills_blank_gene_name() -> None:
     assert result["gene_name"].tolist() == ["abc", "SPAC2.02"]
 
 
+def test_attach_pombase_annotation_uses_each_gene_name() -> None:
+    frame = pd.DataFrame(
+        {
+            "uniprot_id": ["P1", "P1"],
+            "systematic_id": ["SPAC1.01", "SPAC2.02"],
+            "gene_name": [pd.NA, pd.NA],
+            "protein_length": [100.0, 100.0],
+        }
+    )
+    genes = pd.DataFrame(
+        {
+            "uniprot_id": ["P1", "P1"],
+            "gene_systematic_id": ["SPAC1.01", "SPAC2.02"],
+            "gene_name": ["first", "second"],
+        }
+    )
+    stats = pd.DataFrame({"Systematic_ID": ["SPAC1.01", "SPAC2.02"], "Residues": [100, 100]})
+
+    result = attach_pombase_annotation(frame, genes, stats)
+
+    assert result["gene_name"].tolist() == ["first", "second"]
+
+
 def test_assign_type() -> None:
     frame = pd.DataFrame(
         {
@@ -116,6 +158,19 @@ def test_assign_type() -> None:
     result = assign_type(frame, 70.0)
     assert result["location"].tolist() == ["N-terminal", "C-terminal", "Whole", "middle"]
     assert result["domain_type"].tolist() == ["domain", "disordered", "domain", "disordered"]
+
+
+def test_assign_type_uses_outermost_intervals() -> None:
+    frame = pd.DataFrame(
+        {
+            "domain_residues": ["10-20,1-5"],
+            "domain_length": [16],
+            "protein_length": [30],
+            "mean_pLDDT": [90.0],
+        }
+    )
+    result = assign_type(frame, 70.0)
+    assert result["location"].tolist() == ["N-terminal"]
 
 
 def test_build_reformated_frame_uses_registry_gene_id() -> None:

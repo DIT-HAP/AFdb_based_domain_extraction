@@ -83,7 +83,12 @@ SOURCE_ORDER = ["PAE", "TED", "ECOD"]
 # =============================================================================
 # 3. FUNCTIONAL CORE
 # =============================================================================
-def expand_intervals(frame: pd.DataFrame, interval_column: str, separator: str) -> pd.DataFrame:
+def expand_intervals(
+    frame: pd.DataFrame,
+    interval_column: str,
+    separator: str,
+    group_columns: tuple[str, ...] = ("uniprot_id", "segment_id"),
+) -> pd.DataFrame:
     """Explode a multi-interval column into one 1-based row per interval."""
     expanded = frame.assign(_interval=frame[interval_column].str.split(separator)).explode(
         "_interval"
@@ -92,9 +97,7 @@ def expand_intervals(frame: pd.DataFrame, interval_column: str, separator: str) 
     expanded["start"] = bounds[0].astype(int)
     expanded["end"] = bounds[1].astype(int)
     expanded["length"] = expanded["end"] - expanded["start"] + 1
-    expanded["segment_part"] = (
-        expanded.groupby(["uniprot_id", "segment_id"], sort=False).cumcount() + 1
-    )
+    expanded["segment_part"] = expanded.groupby(list(group_columns), sort=False).cumcount() + 1
     return expanded.drop(columns=["_interval", interval_column])
 
 
@@ -117,7 +120,12 @@ def load_pae_segments(path: Path, dataset: str, source_version: str) -> pd.DataF
     frame["score_type"] = "mean_pLDDT"
     frame["family"] = ""
     frame["gene_name"] = pd.NA
-    return expand_intervals(frame, "domain_residues", ",")[UNIFIED_COLUMNS]
+    return expand_intervals(
+        frame,
+        "domain_residues",
+        ",",
+        group_columns=("systematic_id", "uniprot_id", "segment_id"),
+    )[UNIFIED_COLUMNS]
 
 
 def load_ted_segments(path: Path, dataset: str, source_version: str) -> pd.DataFrame:
@@ -179,7 +187,12 @@ def attach_pombase_annotation(
 
     result = frame.merge(gene_map, on="uniprot_id", how="left", suffixes=("", "_pombase"))
     result["systematic_id"] = result["systematic_id"].combine_first(result["gene_systematic_id"])
-    result["gene_name"] = result["gene_name"].combine_first(result["gene_name_pombase"])
+    names_by_gene = genes.drop_duplicates("gene_systematic_id").set_index("gene_systematic_id")
+    result["gene_name"] = (
+        result["gene_name"]
+        .combine_first(result["systematic_id"].map(names_by_gene["gene_name"]))
+        .combine_first(result["gene_name_pombase"])
+    )
     blank_name = result["gene_name"].fillna("").eq("")
     result["gene_name"] = result["gene_name"].mask(blank_name, result["systematic_id"])
     result["protein_length"] = result["protein_length"].combine_first(result["pombase_length"])

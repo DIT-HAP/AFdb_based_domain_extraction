@@ -25,7 +25,8 @@ replaces the ad-hoc shell orchestration with a Snakemake workflow.
 rule (`R#`), and the script (`S#`).
 
 The legacy per-dataset branch was removed on 2026-11-19; its archived outputs
-remain under `tmp/afdb_vs_pombase/archive/` and the v1 code in git history.
+remain under `tmp/afdb_vs_pombase/archive/` (local, untracked), and the v1 code
+is in git history.
 
 Segment coordinates are **1-based inclusive**; `length = end - start + 1`.
 
@@ -83,8 +84,10 @@ python scripts/afdb_domains.py registry-pae-to-domains --registry <tsv> --output
 - `reference_root` — `/hugedata/YushengYang/AFdb`, holding the AFdb structures
   and PAE, the selected custom predictions under `predictions/`, and the raw
   `TED/` and `ECOD/` dumps.
-- `legacy_root` — the v1 repository, used as the read-only numerical
-  verification baseline.
+- `legacy_root` — the v1 repository, kept as the read-only numerical
+  verification baseline (no pipeline rule reads it).
+- `project_root` — the repository root (`"."`), holding `resources/` and the
+  config-relative inputs.
 
 All other paths are written with a `cache:`, `reference:`, `legacy:`, or
 `project:` prefix and resolved at load time.
@@ -114,7 +117,7 @@ AFdb v6 CIF + PAE ──afdb-cif-entries / afdb-pae-index──> AFdb entry inve
                                                               │
 PomBase 2026-06-01 + UniProt snapshots ───────────────────────┤
                                                               v
-                                              compare-afdb-pombase ──> comparison tables
+                                              compare_afdb_pombase.py ──> comparison tables
                                                               │
                                                               v
                             build-registry ──> results/04_registry/01_gene_structure_registry.tsv
@@ -123,7 +126,10 @@ PomBase 2026-06-01 + UniProt snapshots ─────────────�
         v                                                           v
 registry-pae-to-domains ──> *.domain ──registry-domains-to-table──> PAE table
 registry-extract-plddt ──────────────────────────────────────────> pLDDT table
-        └────────────── registry-merge-domains ────────────────────┘
+        └────────── registry-merge-domains ──> reformated table
+                                      │
+                                      v
+                                 assign-type ──> annotated PAE table
                                       │
                                       v
                     registry-unify-segments ──> results/11_segments.tsv

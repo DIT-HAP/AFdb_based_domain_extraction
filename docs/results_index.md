@@ -152,7 +152,8 @@ table; coordinates are 1-based inclusive.
 
 ### A1. Stale 2026-11-03 dataset outputs
 
-Location: `tmp/afdb_vs_pombase/archive/stale_results_20261103/`
+Location: `tmp/afdb_vs_pombase/archive/stale_results_20261103/` (local,
+untracked)
 
 Holds the legacy directories `DY47073`, `vDulab2`, `vDulab`, `AF3`, `AFDB_v4`,
 and `combined` (old dataset names). They were moved out of `results/` on
@@ -161,7 +162,7 @@ can only be regenerated from git history.
 
 ### A2. Pre-sequence-first baseline
 
-Location: `results/arc/`
+Location: `results/arc/` (local, untracked)
 
 Holds the complete pre-sequence-first numbering: `01_comparison/`,
 `02_gene_structure_registry.tsv`, `03_registry_summary.tsv`, and the curated
@@ -175,9 +176,10 @@ under the current numbering.
 
 ## Appendix A — Rule index
 
-`R1`–`R13` form the active canonical chain. `R4`/`R5` are auxiliary refresh
-rules outside `rule all`. `R16`–`R19` are the DNA branch, which is maintained
-but outside the acceptance criteria.
+`R1`–`R15` form the active canonical chain; `R14`/`R15` supply the external
+inputs to `R13`. `R4`/`R5` are auxiliary refresh rules outside `rule all`.
+`R16`–`R19` are the DNA branch, which is maintained but outside the acceptance
+criteria.
 
 | # | Rule | Snakefile | Entry point | Script(s) | Produces |
 |---|---|---|---|---|---|

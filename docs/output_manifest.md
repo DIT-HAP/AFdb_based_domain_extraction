@@ -32,7 +32,7 @@ The v1 datasets covered were `AFDB_v4`, `LocalAF2_PomBaseDiffAFdb`,
 | Group | v2 files | Producer |
 |---|---|---|
 | AFdb structure inventory | `results/01_afdb/*` | `afdb-*` |
-| AFdb/PomBase comparison | `results/03_comparison/*` | `compare-afdb-pombase` |
+| AFdb/PomBase comparison | `results/03_comparison/*` | `compare_afdb_pombase.py` |
 | Gene structure registry | `results/04_registry/01_gene_structure_registry.tsv`, `results/04_registry/03_registry_stats.tsv` | `build-registry` |
 | Curated unified segments | `results/11_segments.tsv` | `registry-unify-segments` |
 | Resource provenance | `resources/manifest.tsv` | `fetch-resources` |
